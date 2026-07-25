@@ -13,6 +13,7 @@ import { ActionBarButton, ActionBarStyle, BlurStrategy, HdsActionBar, HdsNavDest
 @Component
 export struct DetailPageContent {
   private scroller: Scroller = new Scroller()
+  @StorageLink('safeAreaBottomPx') safeAreaBottomPx: number = 0
   @Prop emailData: MailDetailParams = new MailDetailParams(new MailItem(), [], 0)
   private pathStack: NavPathStack | null = null
   @State email: MailItem = new MailItem()
@@ -243,7 +244,11 @@ export struct DetailPageContent {
         }
         .width("100%")
         .justifyContent(FlexAlign.Center)
-        .margin({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, bottom: 16 })
+        .margin({
+          left: Constants.PADDING_EDGE,
+          right: Constants.PADDING_EDGE,
+          bottom: 16 + this.getUIContext().px2vp(this.safeAreaBottomPx)
+        })
       }
       .width("100%").height("100%")
     }
@@ -258,9 +263,17 @@ export struct DetailPageContent {
           ]
         }
       },
+      avoidLayoutSafeArea: true,
       enableComponentSafeArea: true,
       style: {
-        scrollEffectOpts: { enableScrollEffect: true, scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR },
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
         originalStyle: {
           contentStyle: {
             titleStyle: { mainTitleColor: $r("app.color.text_primary"), subTitleColor: $r("app.color.text_secondary") },
@@ -274,16 +287,13 @@ export struct DetailPageContent {
             menuStyle: { iconColor: $r("app.color.text_primary") },
             backIconStyle: { iconColor: $r("app.color.text_primary") }
           }
-        },
-        systemMaterialEffect: { materialType: hdsMaterial.MaterialType.IMMERSIVE, materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE }
+        }
       }
     })
     .hideBackButton(false)
     .titleMode(HdsNavDestinationTitleMode.MINI)
     .bindToScrollable([this.scroller])
     .onBackPressed(() => { if (this.pathStack !== null) { this.pathStack.pop() } return true })
-    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-    .systemBarStyle({ statusBarContentColor: "#000000" }, { statusBarContentColor: "#000000" })
     .width("100%").height("100%").backgroundColor($r("app.color.background"))
   }
 

@@ -1,6 +1,7 @@
 ﻿import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit'
 import { window } from '@kit.ArkUI'
 import { preferences } from '@kit.ArkData'
+import { common, Configuration } from '@kit.AbilityKit'
 import { AuthService } from '../common/AuthService'
 import { SystemSettingsService } from '../common/SystemSettingsService'
 import { AdminService } from '../common/AdminService'
@@ -10,16 +11,23 @@ import { MailService } from '../common/MailService'
 
 const PREF_NAME: string = 'cloud_mail_settings'
 
-let appContext: Context | null = null
+let appContext: common.UIAbilityContext | null = null
 let mainWindow: window.Window | null = null
+const avoidAreaChangeCallback = (data: window.AvoidAreaOptions): void => {
+  if (data.type === window.AvoidAreaType.TYPE_SYSTEM) {
+    updateSafeAreaInsets(data.area)
+  }
+}
 
-export function setAppContext(ctx: Context): void {
+export function setAppContext(ctx: common.UIAbilityContext): void {
   appContext = ctx
 }
 
 export default class MailAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     setAppContext(this.context)
+    AppStorage.setOrCreate('safeAreaTopPx', 0)
+    AppStorage.setOrCreate('safeAreaBottomPx', 0)
     this.applySavedColorMode()
   }
 
@@ -30,18 +38,34 @@ export default class MailAbility extends UIAbility {
     AdminService.initialize()
     MailService.initialize()
     PushService.initPush()
+    try {
+      mainWindow = windowStage.getMainWindowSync()
+      mainWindow.setWindowLayoutFullScreen(true)
+        .then(() => {
+          updateSafeAreaInsets()
+        })
+        .catch((err: Error) => {
+          console.error('set full screen layout failed: ' + JSON.stringify(err))
+        })
+      mainWindow.on('avoidAreaChange', avoidAreaChangeCallback)
+      updateSystemBarForMode(AppStorage.get('currentColorMode') as number)
+    } catch (windowErr) {
+      console.error('configure immersive window failed: ' + JSON.stringify(windowErr))
+    }
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
         console.error('loadContent failed: ' + JSON.stringify(err))
         return
       }
-      try {
-        mainWindow = windowStage.getMainWindowSync()
-        updateSystemBarForMode(AppStorage.get('currentColorMode') as number)
-      } catch (windowErr) {
-        console.error('configure system bar failed: ' + JSON.stringify(windowErr))
-      }
     })
+  }
+
+  onConfigurationUpdate(newConfig: Configuration): void {
+    const selectedMode: number | undefined = AppStorage.get('currentColorMode') as number | undefined
+    if (selectedMode === ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET &&
+      newConfig.colorMode !== undefined) {
+      updateSystemBarForMode(newConfig.colorMode)
+    }
   }
 
   private applySavedColorMode(): void {
@@ -67,7 +91,16 @@ export default class MailAbility extends UIAbility {
     }
   }
 
-  onWindowStageDestroy(): void {}
+  onWindowStageDestroy(): void {
+    if (mainWindow !== null) {
+      try {
+        mainWindow.off('avoidAreaChange', avoidAreaChangeCallback)
+      } catch (err) {
+        console.error('remove avoid area listener failed: ' + JSON.stringify(err))
+      }
+    }
+    mainWindow = null
+  }
   onForeground(): void {}
   onBackground(): void {}
   onDestroy(): void {}
@@ -94,12 +127,32 @@ function updateSystemBarForMode(mode: number): void {
   if (mainWindow === null) {
     return
   }
-  const isDark: boolean = mode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK
+  let effectiveMode: number = mode
+  if (mode === ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET && appContext !== null &&
+    appContext.config.colorMode !== undefined) {
+    effectiveMode = appContext.config.colorMode
+  }
+  const isDark: boolean = effectiveMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK
   mainWindow.setWindowSystemBarProperties({
-    // 与 app.color.background 保持一致；页面仍由安全区布局，只有背景绘制延伸到状态栏。
-    statusBarColor: isDark ? '#0D0D0D' : '#F1F3F5',
+    // 状态栏保持显示但背景透明，由页面顶部不透明背景连续绘制到状态栏区域。
+    statusBarColor: '#00000000',
     statusBarContentColor: isDark ? '#E8E8E8' : '#1A1A1A'
   }).catch((err: Error) => {
     console.error('update system bar failed: ' + JSON.stringify(err))
   })
+}
+
+function updateSafeAreaInsets(avoidArea?: window.AvoidArea): void {
+  if (mainWindow === null && avoidArea === undefined) {
+    return
+  }
+  try {
+    const systemArea: window.AvoidArea = avoidArea !== undefined
+      ? avoidArea
+      : mainWindow!.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)
+    AppStorage.set('safeAreaTopPx', systemArea.topRect.height)
+    AppStorage.set('safeAreaBottomPx', systemArea.bottomRect.height)
+  } catch (err) {
+    console.error('update safe area failed: ' + JSON.stringify(err))
+  }
 }

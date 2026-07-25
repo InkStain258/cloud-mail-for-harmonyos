@@ -1,6 +1,7 @@
 ﻿import { hdsMaterial, HdsTabs, HdsTabsController } from "@kit.UIDesignKit"
 import { HdsNavigation } from "@kit.UIDesignKit"
-import { SymbolGlyphModifier } from "@kit.ArkUI"
+import { HdsNavigationTitleMode, ScrollEffectType } from "@kit.UIDesignKit"
+import { LengthMetrics, SymbolGlyphModifier } from "@kit.ArkUI"
 
 import { InboxPage } from "./InboxPage"
 import { SentPage } from "./SentPage"
@@ -28,10 +29,20 @@ import Constants from "../common/Constants"
 struct Index {
   @State currentTab: number = 0
   @StorageLink('authToken') authToken: string = ''
+  @StorageLink('safeAreaTopPx') safeAreaTopPx: number = 0
+  @StorageLink('safeAreaBottomPx') safeAreaBottomPx: number = 0
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm'
   @State showSplash: boolean = true
+  @State inboxSearchText: string = ''
+  @State isInboxSearchFocused: boolean = false
   private tabController: HdsTabsController = new HdsTabsController()
+  private inboxSearchController: SearchController = new SearchController()
   private pathStack: NavPathStack = new NavPathStack()
+  private inboxScroller: Scroller = new Scroller()
+  private sentScroller: Scroller = new Scroller()
+  private draftsScroller: Scroller = new Scroller()
+  private starredScroller: Scroller = new Scroller()
+  private settingsScroller: Scroller = new Scroller()
   private isHomePrepared: boolean = false
 
   aboutToAppear(): void {
@@ -73,7 +84,13 @@ struct Index {
       HdsNavigation(this.pathStack) {
       Stack({ alignContent: Alignment.BottomEnd }) {
         HdsTabs({ controller: this.tabController, index: this.currentTab }) {
-          TabContent() { InboxPage() }
+          TabContent() {
+            InboxPage({
+              scroller: this.inboxScroller,
+              searchText: $inboxSearchText,
+              topContentInset: this.getInboxTopContentInset()
+            })
+          }
             .tabBar(new BottomTabBarStyle({
               normal: new SymbolGlyphModifier($r("sys.symbol.envelope"))
                 .renderingStrategy(SymbolRenderingStrategy.SINGLE)
@@ -83,7 +100,12 @@ struct Index {
                 .fontColor([$r("app.color.primary")])
             }, "收件箱"))
 
-          TabContent() { SentPage() }
+          TabContent() {
+            SentPage({
+              scroller: this.sentScroller,
+              topContentInset: this.getHomeTitleContentInset()
+            })
+          }
             .tabBar(new BottomTabBarStyle({
               normal: new SymbolGlyphModifier($r("sys.symbol.paperplane"))
                 .renderingStrategy(SymbolRenderingStrategy.SINGLE)
@@ -93,7 +115,12 @@ struct Index {
                 .fontColor([$r("app.color.primary")])
             }, "已发送"))
 
-          TabContent() { DraftsPage() }
+          TabContent() {
+            DraftsPage({
+              scroller: this.draftsScroller,
+              topContentInset: this.getHomeTitleContentInset()
+            })
+          }
             .tabBar(new BottomTabBarStyle({
               normal: new SymbolGlyphModifier($r("sys.symbol.doc"))
                 .renderingStrategy(SymbolRenderingStrategy.SINGLE)
@@ -103,7 +130,12 @@ struct Index {
                 .fontColor([$r("app.color.primary")])
             }, "草稿箱"))
 
-          TabContent() { StarredPage() }
+          TabContent() {
+            StarredPage({
+              scroller: this.starredScroller,
+              topContentInset: this.getHomeTitleContentInset()
+            })
+          }
             .tabBar(new BottomTabBarStyle({
               normal: new SymbolGlyphModifier($r("sys.symbol.star"))
                 .renderingStrategy(SymbolRenderingStrategy.SINGLE)
@@ -115,6 +147,8 @@ struct Index {
 
           TabContent() {
             SettingsPage({
+              scroller: this.settingsScroller,
+              topContentInset: this.getHomeTitleContentInset(),
               onLogout: () => { this.logout() },
               onManageAccounts: () => { this.pathStack.pushPathByName('AccountsPage', undefined) },
               onSystemSettings: () => { this.pathStack.pushPathByName('SystemSettingsPage', undefined) },
@@ -139,7 +173,7 @@ struct Index {
         .vertical(false)
         .barPosition(BarPosition.End)
         .barFloatingStyle({
-          barBottomMargin: -8,
+          barBottomMargin: 28,
           adaptToHandedness: true,
           lightColor: $r("app.color.primary"),
           systemMaterialEffect: {
@@ -168,19 +202,59 @@ struct Index {
         .justifyContent(FlexAlign.Center)
         .width(56)
         .aspectRatio(1)
-        .margin({ right: 16, bottom: 55 })
+        .margin({ right: 16, bottom: 108 })
         .onClick(() => {
           this.pathStack.pushPathByName("ComposePage", undefined)
         })
       }
       .width("100%")
       .height("100%")
+      .padding({
+        bottom: this.getUIContext().px2vp(this.safeAreaBottomPx)
+      })
       .backgroundColor($r("app.color.background"))
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
     }
     .navDestination(this.navDestinationBuilder)
-    .hideTitleBar(true)
+    .titleBar({
+      content: {
+        title: { mainTitle: this.getCurrentTitle() },
+        bottomBuilder: { builder: (): void => this.TitleBottomBuilder() }
+      },
+      avoidLayoutSafeArea: true,
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
+        originalStyle: {
+          backgroundStyle: {
+            maskExtraHeight: this.currentTab === 0 ? Constants.SEARCH_BLUR_MASK_EXTRA_HEIGHT : 0
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: {
+            maskExtraHeight: this.currentTab === 0 ? Constants.SEARCH_BLUR_MASK_EXTRA_HEIGHT : 0
+          }
+        }
+      }
+    })
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .hideBackButton(true)
+    .bindToScrollable([
+      this.inboxScroller,
+      this.sentScroller,
+      this.draftsScroller,
+      this.starredScroller,
+      this.settingsScroller
+    ])
     .hideToolBar(true)
+    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
       .width("100%")
       .height("100%")
       .backgroundColor($r("app.color.background"))
@@ -207,6 +281,64 @@ struct Index {
 
   private async refreshUserIdentity(): Promise<void> {
     await AuthService.refreshSession()
+  }
+
+  private getCurrentTitle(): string {
+    const titles: string[] = ['收件箱', '已发送', '草稿箱', '星标邮件', '个人设置']
+    return titles[this.currentTab]
+  }
+
+  private getHomeTitleContentInset(): number {
+    return this.getUIContext().px2vp(this.safeAreaTopPx) + Constants.TITLE_BAR_HEIGHT_MINI
+  }
+
+  private getInboxTopContentInset(): number {
+    return this.getUIContext().px2vp(this.safeAreaTopPx) + Constants.INBOX_TOP_CONTENT_INSET
+  }
+
+  @Builder
+  private TitleBottomBuilder() {
+    if (this.currentTab === 0) {
+      Column() {
+        Search({
+          value: this.inboxSearchText,
+          placeholder: '搜索邮件',
+          controller: this.inboxSearchController
+        })
+          .searchIcon({ src: $r('sys.media.ohos_ic_public_search_filled'), size: 20 })
+          .cancelButton({
+            style: CancelButtonStyle.INPUT,
+            icon: { size: 18, color: $r('app.color.text_tertiary'), src: '' }
+          })
+          .placeholderColor($r('app.color.text_tertiary'))
+          .fontColor($r('app.color.text_primary'))
+          .backgroundColor(Color.Transparent)
+          .border({
+            width: this.isInboxSearchFocused ? 1 : 0.5,
+            color: this.isInboxSearchFocused ? $r('app.color.primary') : $r('app.color.divider')
+          })
+          .borderRadius(Constants.RADIUS_BUTTON)
+          .height(48)
+          .margin({
+            left: Constants.PADDING_EDGE,
+            right: Constants.PADDING_EDGE,
+            top: 4,
+            bottom: 8
+          })
+          .animation({ duration: Constants.DURATION_NORMAL, curve: Curve.EaseOut })
+          .onChange((value: string) => {
+            this.inboxSearchText = value
+          })
+          .onFocus(() => {
+            this.isInboxSearchFocused = true
+          })
+          .onBlur(() => {
+            this.isInboxSearchFocused = false
+          })
+      }
+      .width('100%')
+      .height(Constants.SEARCH_TITLE_BAR_HEIGHT)
+    }
   }
 
   @Builder

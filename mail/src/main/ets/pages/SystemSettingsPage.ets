@@ -1,5 +1,6 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
+import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
 import { ApiException } from '../common/HttpClient'
 import { SystemSettings, SystemSettingsService } from '../common/SystemSettingsService'
@@ -7,6 +8,7 @@ import { EmptyState } from '../components/EmptyState'
 
 @Component
 export struct SystemSettingsPage {
+  private scroller: Scroller = new Scroller()
   @StorageLink('authRole') authRole: string = 'user'
   @State siteTitle: string = ''
   @State registrationEnabled: boolean = true
@@ -25,7 +27,7 @@ export struct SystemSettingsPage {
         EmptyState({ icon: $r('sys.symbol.person'), message: '仅管理员可访问系统设置' })
       } else {
         Stack({ alignContent: Alignment.TopStart }) {
-          Scroll() {
+          Scroll(this.scroller) {
           Column({ space: Constants.GAP_MEDIUM }) {
             Text('系统设置')
               .fontSize(Constants.FONT_SIZE_TITLE)
@@ -142,9 +144,24 @@ export struct SystemSettingsPage {
         .height('100%')
       }
     }
-    .titleBar({ content: { title: { mainTitle: '系统设置' } }, enableComponentSafeArea: true })
+    .titleBar({
+      content: { title: { mainTitle: '系统设置' } },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: true,
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      }
+    })
     .hideBackButton(false)
     .titleMode(HdsNavDestinationTitleMode.MINI)
+    .bindToScrollable([this.scroller])
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))

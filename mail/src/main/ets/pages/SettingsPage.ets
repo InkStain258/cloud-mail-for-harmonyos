@@ -7,6 +7,8 @@ import { setAppColorMode } from '../mailability/MailAbility'
 
 @Component
 export struct SettingsPage {
+  scroller: Scroller = new Scroller()
+  @Prop topContentInset: number = Constants.TITLE_BAR_HEIGHT_MINI
   @StorageLink('authEmail') authEmail: string = ''
   @StorageLink('authRole') authRole: string = 'user'
   @StorageLink('authRoleName') authRoleName: string = '普通用户'
@@ -31,13 +33,9 @@ export struct SettingsPage {
 
   build() {
     Stack() {
-      Scroll() {
+      Scroll(this.scroller) {
         Column({ space: Constants.GAP_MEDIUM }) {
-          Text('个人设置')
-            .fontSize(Constants.FONT_SIZE_HERO)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-            .width('100%')
+          Blank().height(this.topContentInset)
 
           Row({ space: Constants.GAP_MEDIUM }) {
             AvatarBar({
@@ -132,7 +130,7 @@ export struct SettingsPage {
           Blank().height(Constants.PADDING_TAB_CONTENT_BOTTOM)
         }
         .width('100%')
-        .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, top: 16, bottom: 16 })
+        .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, top: 4, bottom: 16 })
       }
       .width('100%')
       .height('100%')
@@ -150,6 +148,7 @@ export struct SettingsPage {
     }
     .width('100%')
     .height('100%')
+    .backgroundColor($r('app.color.background'))
   }
 
   @Builder

@@ -1,10 +1,12 @@
 ﻿import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
+import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import { AdminAnalytics, AdminService, AdminStats, TrendItem } from '../common/AdminService'
 import { EmptyState } from '../components/EmptyState'
 
 @Component
 export struct AnalyticsPage {
+  private scroller: Scroller = new Scroller()
   @StorageLink('authRole') authRole: string = 'user'
   @StorageLink('adminUserRevision') @Watch('onDataChanged') userRevision: number = 0
   @StorageLink('adminMailRevision') @Watch('onDataChanged') mailRevision: number = 0
@@ -25,7 +27,7 @@ export struct AnalyticsPage {
       if (this.authRole !== 'admin') {
         EmptyState({ icon: $r('sys.symbol.externaldrive'), message: '仅管理员可访问数据分析' })
       } else {
-        Scroll() {
+        Scroll(this.scroller) {
           Column({ space: Constants.GAP_MEDIUM }) {
             Text('数据分析')
               .fontSize(Constants.FONT_SIZE_TITLE)
@@ -91,9 +93,24 @@ export struct AnalyticsPage {
         .scrollBar(BarState.Off)
       }
     }
-    .titleBar({ content: { title: { mainTitle: '数据分析' } }, enableComponentSafeArea: true })
+    .titleBar({
+      content: { title: { mainTitle: '数据分析' } },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: true,
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      }
+    })
     .hideBackButton(false)
     .titleMode(HdsNavDestinationTitleMode.MINI)
+    .bindToScrollable([this.scroller])
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))

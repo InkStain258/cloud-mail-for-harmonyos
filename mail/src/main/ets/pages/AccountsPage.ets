@@ -1,6 +1,7 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { ApiException } from '../common/HttpClient'
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
+import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
 import { AccountResult, AccountService, ManagedAccount } from '../common/AccountService'
 import { AccountCard } from '../components/AccountCard'
@@ -93,9 +94,24 @@ export struct AccountsPage {
       .width('100%')
       .height('100%')
     }
-    .titleBar({ content: { title: { mainTitle: '账号管理' } }, enableComponentSafeArea: true })
+    .titleBar({
+      content: { title: { mainTitle: '账号管理' } },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: true,
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      }
+    })
     .hideBackButton(false)
     .titleMode(HdsNavDestinationTitleMode.MINI)
+    .bindToScrollable([this.scroller])
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))

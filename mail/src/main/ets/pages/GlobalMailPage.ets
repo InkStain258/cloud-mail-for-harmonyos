@@ -1,11 +1,13 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
+import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
 import { AdminResult, AdminService, GlobalMail } from '../common/AdminService'
 import { EmptyState } from '../components/EmptyState'
 
 @Component
 export struct GlobalMailPage {
+  private scroller: Scroller = new Scroller()
   @StorageLink('authRole') authRole: string = 'user'
   @StorageLink('adminMailRevision') @Watch('onMailRevision') mailRevision: number = 0
   @State mailList: GlobalMail[] = []
@@ -32,7 +34,7 @@ export struct GlobalMailPage {
         EmptyState({ icon: $r('sys.symbol.envelope'), message: '仅管理员可访问全部邮件' })
       } else {
         Stack() {
-          Scroll() {
+          Scroll(this.scroller) {
             Column({ space: Constants.GAP_MEDIUM }) {
               Text('全部邮件')
                 .fontSize(Constants.FONT_SIZE_TITLE)
@@ -129,9 +131,24 @@ export struct GlobalMailPage {
         .height('100%')
       }
     }
-    .titleBar({ content: { title: { mainTitle: '全部邮件' } }, enableComponentSafeArea: true })
+    .titleBar({
+      content: { title: { mainTitle: '全部邮件' } },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: true,
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      }
+    })
     .hideBackButton(false)
     .titleMode(HdsNavDestinationTitleMode.MINI)
+    .bindToScrollable([this.scroller])
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))

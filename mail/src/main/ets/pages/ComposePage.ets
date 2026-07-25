@@ -34,6 +34,7 @@ export class ComposeParams {
 @Component
 export struct ComposePageContent {
   private scroller: Scroller = new Scroller()
+  @StorageLink('safeAreaBottomPx') safeAreaBottomPx: number = 0
   @Prop composeParams: ComposeParams = new ComposeParams()
   @State toEmail: string = ""
   @State ccEmail: string = ""
@@ -169,13 +170,22 @@ export struct ComposePageContent {
         .alignItems(HorizontalAlign.Start)
       }
       .width("100%").height("100%")
+      .padding({ bottom: this.getUIContext().px2vp(this.safeAreaBottomPx) })
       .scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring)
     }
     .titleBar({
       content: { title: { mainTitle: "写邮件" } },
+      avoidLayoutSafeArea: true,
       enableComponentSafeArea: true,
       style: {
-        scrollEffectOpts: { enableScrollEffect: true, scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR },
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
         originalStyle: {
           contentStyle: {
             titleStyle: { mainTitleColor: $r("app.color.text_primary") },
@@ -187,8 +197,7 @@ export struct ComposePageContent {
             titleStyle: { mainTitleColor: $r("app.color.text_primary") },
             backIconStyle: { iconColor: $r("app.color.text_primary") }
           }
-        },
-        systemMaterialEffect: { materialType: hdsMaterial.MaterialType.IMMERSIVE, materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE }
+        }
       }
     })
     .hideBackButton(false)
@@ -200,8 +209,6 @@ export struct ComposePageContent {
       if (stack !== null) { stack.pop() }
       return true
     })
-    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
-    .systemBarStyle({ statusBarContentColor: "#000000" }, { statusBarContentColor: "#000000" })
     .width("100%").height("100%")
     .backgroundColor($r("app.color.background"))
   }

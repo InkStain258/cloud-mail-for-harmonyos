@@ -8,12 +8,11 @@ import { EmailCard } from '../components/EmailCard'
 
 @Component
 export struct InboxPage {
-  private scroller: Scroller = new Scroller()
-  private searchController: SearchController = new SearchController()
+  scroller: Scroller = new Scroller()
+  @Prop topContentInset: number = Constants.INBOX_TOP_CONTENT_INSET
   private dataSource: MailListDataSource = new MailListDataSource()
   @StorageLink('mailRevision') @Watch('onMailRevision') mailRevision: number = 0
-  @State searchText: string = ''
-  @State isSearchFocused: boolean = false
+  @Link @Watch('onSearchTextUpdated') searchText: string
   @State emailList: MailItem[] = []
   @State isLoading: boolean = false
   @State isLoadingMore: boolean = false
@@ -32,6 +31,10 @@ export struct InboxPage {
     this.loadEmails(false)
   }
 
+  private onSearchTextUpdated(): void {
+    this.syncVisibleData()
+  }
+
   private async loadEmails(showLoading: boolean = true, showSuccess: boolean = false): Promise<void> {
     if (showLoading) {
       this.isLoading = true
@@ -40,7 +43,7 @@ export struct InboxPage {
       const page: MailPage = await MailService.loadInboxPage(0)
       this.emailList = page.items
       this.hasMore = this.emailList.length < page.total && page.items.length > 0
-      this.dataSource.setData(this.emailList)
+      this.syncVisibleData()
       if (showSuccess) {
         this.showToast('邮件已刷新')
       }
@@ -101,13 +104,19 @@ export struct InboxPage {
   }
 
   private getFiltered(): MailItem[] {
-    if (this.searchText.trim() === '') {
+    const keyword: string = this.searchText.trim().toLowerCase()
+    if (keyword === '') {
       return this.emailList
     }
     return this.emailList.filter((item: MailItem) =>
-      item.name.toLowerCase().includes(this.searchText.toLowerCase()) ||
-      item.subject.toLowerCase().includes(this.searchText.toLowerCase())
+      item.name.toLowerCase().includes(keyword) ||
+      item.email.toLowerCase().includes(keyword) ||
+      item.subject.toLowerCase().includes(keyword)
     )
+  }
+
+  private syncVisibleData(): void {
+    this.dataSource.setData(this.getFiltered())
   }
 
   private async markAsRead(id: number): Promise<void> {
@@ -140,7 +149,7 @@ export struct InboxPage {
         }
       }
       this.emailList = result
-      this.dataSource.removeItem(id)
+      this.syncVisibleData()
       this.showToast('邮件已删除')
     } catch (err) {
       this.showRequestError(err)
@@ -167,7 +176,7 @@ export struct InboxPage {
       result.push(next)
     }
     this.emailList = result
-    this.dataSource.setData(this.emailList)
+    this.syncVisibleData()
     this.refreshKey++
   }
 
@@ -182,7 +191,7 @@ export struct InboxPage {
       result.push(next)
     }
     this.emailList = result
-    this.dataSource.setData(this.emailList)
+    this.syncVisibleData()
     this.refreshKey++
   }
 
@@ -223,7 +232,7 @@ export struct InboxPage {
     }
     .width('100%')
     .height(36)
-    .translate({ y: 124 })
+    .translate({ y: this.topContentInset })
   }
 
   build() {
@@ -236,13 +245,13 @@ export struct InboxPage {
         }
         .width('100%')
         .height('100%')
-        .padding({ top: 120 })
+        .padding({ top: this.topContentInset })
         .justifyContent(FlexAlign.Center)
       } else if (this.getFiltered().length === 0) {
         Refresh({ refreshing: $$this.isRefreshing, builder: this.RefreshIndicator() }) {
           List({ scroller: this.scroller }) {
             ListItem() {
-              Column().height(124)
+              Column().height(this.topContentInset)
             }
             ListItem() {
               Column() {
@@ -275,7 +284,7 @@ export struct InboxPage {
         Refresh({ refreshing: $$this.isRefreshing, builder: this.RefreshIndicator() }) {
           List({ scroller: this.scroller }) {
           ListItem() {
-            Column().height(124)
+            Column().height(this.topContentInset)
           }
           LazyForEach(this.dataSource, (item: MailItem, index: number) => {
             ListItem() {
@@ -325,47 +334,6 @@ export struct InboxPage {
         .onRefreshing(() => { this.loadEmails(false, true) })
       }
 
-      Column() {
-        Stack({ alignContent: Alignment.BottomStart }) {
-          Row()
-            .width('100%')
-            .height('100%')
-            .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
-
-          Text('收件箱')
-            .fontSize(28)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-            .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, top: 16, bottom: 8 })
-            .width('100%')
-        }
-        .width('100%')
-        .height(56)
-
-        Search({ value: this.searchText, placeholder: '搜索邮件', controller: this.searchController })
-          .searchIcon({ src: $r('sys.media.ohos_ic_public_search_filled'), size: 20 })
-          .cancelButton({
-            style: CancelButtonStyle.INPUT,
-            icon: { size: 18, color: $r('app.color.text_tertiary'), src: '' }
-          })
-          .placeholderColor($r('app.color.text_tertiary'))
-          .fontColor($r('app.color.text_primary'))
-          .backgroundColor(Color.Transparent)
-          .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
-          .border({
-            width: this.isSearchFocused ? 1 : 0.5,
-            color: this.isSearchFocused ? $r('app.color.primary') : $r('app.color.divider')
-          })
-          .borderRadius(Constants.RADIUS_BUTTON)
-          .height(48)
-          .margin({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, top: 4, bottom: 8 })
-          .animation({ duration: Constants.DURATION_NORMAL, curve: Curve.EaseOut })
-          .onChange((value: string) => { this.searchText = value })
-          .onFocus(() => { this.isSearchFocused = true })
-          .onBlur(() => { this.isSearchFocused = false })
-      }
-      .width('100%')
-      .zIndex(1)
     }
     .width('100%')
     .height('100%')

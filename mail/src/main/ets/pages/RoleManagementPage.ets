@@ -1,5 +1,6 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
+import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
 import { AdminPermission, AdminResult, AdminRole, AdminService } from '../common/AdminService'
 import { EmptyState } from '../components/EmptyState'
@@ -18,6 +19,7 @@ class PermissionItem {
 
 @Component
 export struct RoleManagementPage {
+  private scroller: Scroller = new Scroller()
   @StorageLink('authRole') authRole: string = 'user'
   @StorageLink('adminRoleRevision') @Watch('onRoleRevision') roleRevision: number = 0
   @State roleList: AdminRole[] = []
@@ -46,7 +48,7 @@ export struct RoleManagementPage {
         EmptyState({ icon: $r('sys.symbol.person'), message: '仅管理员可访问角色权限' })
       } else {
         Stack({ alignContent: Alignment.TopStart }) {
-          Scroll() {
+          Scroll(this.scroller) {
             Column({ space: Constants.GAP_MEDIUM }) {
               Row() {
                 Column() {
@@ -104,9 +106,24 @@ export struct RoleManagementPage {
         .height('100%')
       }
     }
-    .titleBar({ content: { title: { mainTitle: '角色权限' } }, enableComponentSafeArea: true })
+    .titleBar({
+      content: { title: { mainTitle: '角色权限' } },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: true,
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      }
+    })
     .hideBackButton(false)
     .titleMode(HdsNavDestinationTitleMode.MINI)
+    .bindToScrollable([this.scroller])
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))

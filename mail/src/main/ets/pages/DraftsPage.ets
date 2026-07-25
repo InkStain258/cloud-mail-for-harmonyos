@@ -6,7 +6,8 @@ import { ComposeParams } from './ComposePage'
 
 @Component
 export struct DraftsPage {
-  private scroller: Scroller = new Scroller()
+  scroller: Scroller = new Scroller()
+  @Prop topContentInset: number = Constants.TITLE_BAR_HEIGHT_MINI
   private dataSource: DraftListDataSource = new DraftListDataSource()
   private pathStack: NavPathStack = AppStorage.get('appPathStack') as NavPathStack
   @StorageLink('draftRevision') @Watch('onDraftRevision') draftRevision: number = 0
@@ -44,11 +45,11 @@ export struct DraftsPage {
         }
         .width('100%')
         .height('100%')
-        .padding({ top: 56 })
+        .padding({ top: this.topContentInset })
       } else {
         List({ scroller: this.scroller }) {
           ListItem() {
-            Column().height(56)
+            Column().height(this.topContentInset)
           }
           LazyForEach(this.dataSource, (item: MailDraft) => {
             ListItem() {
@@ -104,22 +105,6 @@ export struct DraftsPage {
         .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
       }
 
-      Stack({ alignContent: Alignment.BottomStart }) {
-        Row()
-          .width('100%')
-          .height('100%')
-          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
-
-        Text('草稿箱')
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, top: 16, bottom: 8 })
-          .width('100%')
-      }
-      .width('100%')
-      .height(56)
-        .zIndex(1)
     }
     .width('100%')
     .height('100%')

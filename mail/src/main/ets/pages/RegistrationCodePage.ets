@@ -1,11 +1,13 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
+import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
 import { AdminResult, AdminRole, AdminService, RegistrationCode } from '../common/AdminService'
 import { EmptyState } from '../components/EmptyState'
 
 @Component
 export struct RegistrationCodePage {
+  private scroller: Scroller = new Scroller()
   @StorageLink('authRole') authRole: string = 'user'
   @StorageLink('registrationCodeRevision') @Watch('onCodeRevision') codeRevision: number = 0
   @StorageLink('adminRoleRevision') @Watch('onRoleRevision') roleRevision: number = 0
@@ -37,7 +39,7 @@ export struct RegistrationCodePage {
         EmptyState({ icon: $r('sys.symbol.doc'), message: '仅管理员可访问注册码管理' })
       } else {
         Stack({ alignContent: Alignment.TopStart }) {
-          Scroll() {
+          Scroll(this.scroller) {
             Column({ space: Constants.GAP_MEDIUM }) {
               Row() {
                 Column() {
@@ -92,9 +94,24 @@ export struct RegistrationCodePage {
         .height('100%')
       }
     }
-    .titleBar({ content: { title: { mainTitle: '注册码管理' } }, enableComponentSafeArea: true })
+    .titleBar({
+      content: { title: { mainTitle: '注册码管理' } },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: true,
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      }
+    })
     .hideBackButton(false)
     .titleMode(HdsNavDestinationTitleMode.MINI)
+    .bindToScrollable([this.scroller])
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))

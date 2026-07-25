@@ -1,11 +1,13 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
+import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
 import { AdminResult, AdminRole, AdminService, AdminUser } from '../common/AdminService'
 import { EmptyState } from '../components/EmptyState'
 
 @Component
 export struct UserManagementPage {
+  private scroller: Scroller = new Scroller()
   @StorageLink('authRole') authRole: string = 'user'
   @StorageLink('adminUserRevision') @Watch('onUserRevision') userRevision: number = 0
   @State userList: AdminUser[] = []
@@ -40,7 +42,7 @@ export struct UserManagementPage {
         EmptyState({ icon: $r('sys.symbol.person'), message: '仅管理员可访问用户管理' })
       } else {
         Stack() {
-          Scroll() {
+          Scroll(this.scroller) {
             Column({ space: Constants.GAP_MEDIUM }) {
               Row() {
                 Column() {
@@ -115,9 +117,24 @@ export struct UserManagementPage {
         .height('100%')
       }
     }
-    .titleBar({ content: { title: { mainTitle: '用户管理' } }, enableComponentSafeArea: true })
+    .titleBar({
+      content: { title: { mainTitle: '用户管理' } },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: true,
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      }
+    })
     .hideBackButton(false)
     .titleMode(HdsNavDestinationTitleMode.MINI)
+    .bindToScrollable([this.scroller])
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))

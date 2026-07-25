@@ -9,7 +9,8 @@ import { EmptyState } from '../components/EmptyState'
 
 @Component
 export struct StarredPage {
-  private scroller: Scroller = new Scroller()
+  scroller: Scroller = new Scroller()
+  @Prop topContentInset: number = Constants.TITLE_BAR_HEIGHT_MINI
   private dataSource: MailListDataSource = new MailListDataSource()
   private pathStack: NavPathStack = AppStorage.get('appPathStack') as NavPathStack
   private toast: PromptAction = this.getUIContext().getPromptAction()
@@ -84,18 +85,18 @@ export struct StarredPage {
         }
         .width('100%')
         .height('100%')
-        .padding({ top: 56 })
+        .padding({ top: this.topContentInset })
       } else if (this.starList.length === 0) {
         Column() {
           EmptyState({ icon: $r('sys.symbol.star'), message: '暂无星标邮件' })
         }
         .width('100%')
         .height('100%')
-        .padding({ top: 56 })
+        .padding({ top: this.topContentInset })
       } else {
         List({ scroller: this.scroller }) {
           ListItem() {
-            Column().height(56)
+            Column().height(this.topContentInset)
           }
           LazyForEach(this.dataSource, (item: MailItem, index: number) => {
             ListItem() {
@@ -125,22 +126,6 @@ export struct StarredPage {
         .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
       }
 
-      Stack({ alignContent: Alignment.BottomStart }) {
-        Row()
-          .width('100%')
-          .height('100%')
-          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
-
-        Text('星标邮件')
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, top: 16, bottom: 8 })
-          .width('100%')
-      }
-      .width('100%')
-      .height(56)
-        .zIndex(1)
     }
     .width('100%')
     .height('100%')

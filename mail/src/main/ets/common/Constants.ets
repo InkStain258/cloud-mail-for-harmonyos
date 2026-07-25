@@ -33,6 +33,11 @@
   static readonly PADDING_INNER: number = 10
   static readonly PADDING_CARD: number = 12
   static readonly PADDING_TAB_CONTENT_BOTTOM: number = 56
+  static readonly TITLE_BAR_HEIGHT_MINI: number = 56
+  static readonly SEARCH_TITLE_BAR_HEIGHT: number = 60
+  static readonly SEARCH_BLUR_MASK_EXTRA_HEIGHT: number = 52
+  static readonly INBOX_TOP_CONTENT_INSET: number =
+    Constants.TITLE_BAR_HEIGHT_MINI + Constants.SEARCH_TITLE_BAR_HEIGHT
   static readonly GAP_SMALL: number = 8
   static readonly GAP_MEDIUM: number = 12
 
