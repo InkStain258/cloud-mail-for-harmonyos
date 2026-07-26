@@ -11,7 +11,12 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
-    
+    "metadata": [
+      {
+        "name": "client_id",
+        "value": "6917611451225531193"
+      }
+    ],
     "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET"

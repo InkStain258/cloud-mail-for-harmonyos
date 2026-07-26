@@ -1,5 +1,6 @@
 ﻿import { AuthApi, AuthUserInfo } from '../api/AuthApi'
 import { ApiException } from './HttpClient'
+import { HuaweiLoginResult, HuaweiSessionResult } from '../api/AuthApi'
 import { SessionService } from './SessionService'
 import Constants from './Constants'
 
@@ -10,6 +11,20 @@ export class AuthResult {
   constructor(success: boolean, message: string) {
     this.success = success
     this.message = message
+  }
+}
+
+export class HuaweiAuthResult {
+  success: boolean
+  message: string
+  bound: boolean
+  bindToken: string
+
+  constructor(success: boolean, message: string, bound: boolean, bindToken: string) {
+    this.success = success
+    this.message = message
+    this.bound = bound
+    this.bindToken = bindToken
   }
 }
 
@@ -48,6 +63,45 @@ export class AuthService {
     }
   }
 
+  static async loginWithHuawei(authorizationCode: string): Promise<HuaweiAuthResult> {
+    try {
+      const result: HuaweiLoginResult = await AuthApi.loginWithHuawei(authorizationCode)
+      if (!result.bound) {
+        return new HuaweiAuthResult(true, '', false, result.bindToken)
+      }
+      await AuthService.saveHuaweiSession(result.token, result.email)
+      return new HuaweiAuthResult(true, '', true, '')
+    } catch (err) {
+      return new HuaweiAuthResult(false, AuthService.getErrorMessage(err), false, '')
+    }
+  }
+
+  static async bindHuaweiAccount(bindToken: string, email: string, password: string): Promise<AuthResult> {
+    if (!AuthService.isSupportedEmail(email)) {
+      return new AuthResult(false, '仅支持 ' + Constants.MAIL_DOMAIN + ' 邮箱')
+    }
+    try {
+      const result: HuaweiSessionResult = await AuthApi.bindHuaweiAccount(bindToken, email, password)
+      await AuthService.saveHuaweiSession(result.token, result.email)
+      return new AuthResult(true, '')
+    } catch (err) {
+      return new AuthResult(false, AuthService.getErrorMessage(err))
+    }
+  }
+
+  static async registerWithHuawei(bindToken: string, email: string, registerCode: string): Promise<AuthResult> {
+    if (!AuthService.isSupportedEmail(email)) {
+      return new AuthResult(false, '仅支持 ' + Constants.MAIL_DOMAIN + ' 邮箱')
+    }
+    try {
+      const result: HuaweiSessionResult = await AuthApi.registerWithHuawei(bindToken, email, registerCode)
+      await AuthService.saveHuaweiSession(result.token, result.email)
+      return new AuthResult(true, '')
+    } catch (err) {
+      return new AuthResult(false, AuthService.getErrorMessage(err))
+    }
+  }
+
   static logout(): void {
     const token: string = SessionService.getToken()
     SessionService.clearSession()
@@ -80,6 +134,12 @@ export class AuthService {
     } catch (err) {
       console.error('logout request failed')
     }
+  }
+
+  private static async saveHuaweiSession(token: string, email: string): Promise<void> {
+    SessionService.saveSession(token, email, 'user', '普通用户', 0)
+    const user: AuthUserInfo = await AuthApi.getCurrentUser()
+    SessionService.saveSession(token, user.email, user.role, user.roleName, user.accountId)
   }
 
   private static getErrorMessage(err: Object): string {

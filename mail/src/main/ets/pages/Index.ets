@@ -20,6 +20,7 @@ import { GlobalMailPage } from "./GlobalMailPage"
 import { RoleManagementPage } from "./RoleManagementPage"
 import { AnalyticsPage } from "./AnalyticsPage"
 import { RegistrationCodePage } from "./RegistrationCodePage"
+import { HuaweiAccountManagementPage } from "./HuaweiAccountManagementPage"
 import { NotFoundPage } from "./NotFoundPage"
 import { SplashPage } from "./SplashPage"
 import Constants from "../common/Constants"
@@ -156,7 +157,10 @@ struct Index {
               onManageGlobalMails: () => { this.pathStack.pushPathByName('GlobalMailPage', undefined) },
               onManageRoles: () => { this.pathStack.pushPathByName('RoleManagementPage', undefined) },
               onOpenAnalytics: () => { this.pathStack.pushPathByName('AnalyticsPage', undefined) },
-              onManageRegistrationCodes: () => { this.pathStack.pushPathByName('RegistrationCodePage', undefined) }
+              onManageRegistrationCodes: () => { this.pathStack.pushPathByName('RegistrationCodePage', undefined) },
+              onManageHuaweiAccounts: () => {
+                this.pathStack.pushPathByName('HuaweiAccountManagementPage', undefined)
+              }
             })
           }
             .tabBar(new BottomTabBarStyle({
@@ -365,6 +369,8 @@ struct Index {
       AnalyticsPage()
     } else if (name === 'RegistrationCodePage') {
       RegistrationCodePage()
+    } else if (name === 'HuaweiAccountManagementPage') {
+      HuaweiAccountManagementPage()
     } else {
       NotFoundPage()
     }

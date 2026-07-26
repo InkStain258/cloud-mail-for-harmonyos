@@ -2,7 +2,7 @@
 import { bundleManager, common, ConfigurationConstant } from '@kit.AbilityKit'
 import { HdsListItemCard, IconSize, PrefixIcon, SuffixTextAndArrow } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
-import { AvatarBar } from '../components/AvatarBar'
+import { HuaweiAccountApi, HuaweiAccountBinding } from '../api/HuaweiAccountApi'
 import { setAppColorMode } from '../mailability/MailAbility'
 
 @Component
@@ -15,6 +15,11 @@ export struct SettingsPage {
   @StorageLink('currentColorMode') currentColorMode: number = ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET
   @State showLogoutConfirm: boolean = false
   @State showThemeDialog: boolean = false
+  @State huaweiNickName: string = ''
+  @State huaweiAvatarUrl: string = ''
+  @State huaweiPrimaryEmail: string = ''
+  @State huaweiUserId: string = ''
+  @State huaweiIdentityLoaded: boolean = false
   private toast: PromptAction = this.getUIContext().getPromptAction()
   onLogout?: () => void
   onManageAccounts?: () => void
@@ -24,11 +29,13 @@ export struct SettingsPage {
   onManageRoles?: () => void
   onOpenAnalytics?: () => void
   onManageRegistrationCodes?: () => void
+  onManageHuaweiAccounts?: () => void
 
   aboutToAppear(): void {
     if (this.currentColorMode === undefined || this.currentColorMode === null) {
       this.currentColorMode = ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET
     }
+    this.loadHuaweiIdentity()
   }
 
   build() {
@@ -38,26 +45,45 @@ export struct SettingsPage {
           Blank().height(this.topContentInset)
 
           Row({ space: Constants.GAP_MEDIUM }) {
-            AvatarBar({
-              name: this.authEmail === '' ? 'admin@riordon.xyz' : this.authEmail,
-              avatarSize: 64,
-              fontSize: 28
-            })
+            if (this.huaweiAvatarUrl !== '') {
+              Image(this.huaweiAvatarUrl)
+                .width(64)
+                .height(64)
+                .borderRadius(Constants.RADIUS_FULL)
+                .objectFit(ImageFit.Cover)
+            } else {
+              Stack() {
+                Circle()
+                  .width(64)
+                  .height(64)
+                  .foregroundColor($r('app.color.primary_light'))
+                Text(this.getHuaweiAvatarText())
+                  .fontSize(28)
+                  .fontColor($r('app.color.primary'))
+              }
+              .width(64)
+              .height(64)
+            }
             Column({ space: 6 }) {
-              Text(this.authEmail === '' ? 'admin@riordon.xyz' : this.authEmail)
+              Text(this.getHuaweiDisplayName())
                 .fontSize(Constants.FONT_SIZE_SUBTITLE)
                 .fontWeight(FontWeight.Bold)
                 .fontColor($r('app.color.text_primary'))
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text(this.getHuaweiBindingText())
+                .fontSize(Constants.FONT_SIZE_SMALL)
+                .fontColor($r('app.color.text_secondary'))
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
               Row({ space: Constants.GAP_SMALL }) {
-                Text(this.getRoleLabel())
+                Text('身份组 · ' + this.getRoleLabel())
                   .fontSize(Constants.FONT_SIZE_SMALL)
                   .fontColor($r('app.color.tag_text'))
                   .padding({ left: 10, right: 10, top: 4, bottom: 4 })
                   .borderRadius(Constants.RADIUS_SMALL)
                   .backgroundColor(this.authRole === 'admin' ? $r('app.color.primary_light') : $r('app.color.info'))
-                Text(this.getThemeLabel())
+                Text('华为账号已登录')
                   .fontSize(Constants.FONT_SIZE_SMALL)
                   .fontColor($r('app.color.text_secondary'))
               }
@@ -110,6 +136,10 @@ export struct SettingsPage {
               this.SettingsRow('数据分析', '平台数据概览', '', $r('sys.symbol.doc'), () => { this.openAnalytics() })
               Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
               this.SettingsRow('注册码管理', '生成与使用记录', '', $r('sys.symbol.star_fill'), () => { this.openRegistrationCodeManagement() })
+              Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
+              this.SettingsRow('华为账号绑定', '查看华为账号与主邮箱关系', '', $r('sys.symbol.person_2'), () => {
+                this.openHuaweiAccountManagement()
+              })
             }
             .width('100%')
             .borderRadius(Constants.RADIUS_CARD)
@@ -384,7 +414,7 @@ export struct SettingsPage {
       return 'v' + info.versionName
     } catch (err) {
       console.error('get app version failed')
-      return 'v1.0.2'
+      return 'v1.1.0'
     }
   }
 
@@ -434,6 +464,52 @@ export struct SettingsPage {
     if (this.onManageRegistrationCodes) {
       this.onManageRegistrationCodes()
     }
+  }
+
+  private openHuaweiAccountManagement(): void {
+    if (this.onManageHuaweiAccounts) {
+      this.onManageHuaweiAccounts()
+    }
+  }
+
+  private async loadHuaweiIdentity(): Promise<void> {
+    try {
+      const binding: HuaweiAccountBinding | null = await HuaweiAccountApi.current()
+      this.huaweiIdentityLoaded = true
+      if (binding === null) {
+        return
+      }
+      this.huaweiNickName = binding.nickName
+      this.huaweiAvatarUrl = binding.avatarUrl
+      this.huaweiPrimaryEmail = binding.primaryEmail
+      this.huaweiUserId = binding.huaweiUserId
+    } catch (err) {
+      this.huaweiIdentityLoaded = true
+      console.error('load Huawei identity failed')
+    }
+  }
+
+  private getHuaweiDisplayName(): string {
+    if (!this.huaweiIdentityLoaded) {
+      return '正在读取华为账号'
+    }
+    if (this.huaweiNickName !== '') {
+      return this.huaweiNickName
+    }
+    return this.huaweiUserId === '' ? '华为账号资料待更新' : '华为账号 · ' + this.huaweiUserId
+  }
+
+  private getHuaweiBindingText(): string {
+    if (!this.huaweiIdentityLoaded) {
+      return '正在读取绑定信息'
+    }
+    const email: string = this.huaweiPrimaryEmail === '' ? this.authEmail : this.huaweiPrimaryEmail
+    return email === '' ? '暂未绑定主邮箱' : '绑定主邮箱：' + email
+  }
+
+  private getHuaweiAvatarText(): string {
+    const value: string = this.huaweiNickName === '' ? this.authEmail : this.huaweiNickName
+    return value === '' ? '华' : value.substring(0, 1).toUpperCase()
   }
 
   private async openPrivacyPolicy(): Promise<void> {
