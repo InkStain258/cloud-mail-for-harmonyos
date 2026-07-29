@@ -2,6 +2,7 @@ import { PromptAction } from '@kit.ArkUI'
 import { HdsNavDestination, HdsNavDestinationTitleMode, ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import { HuaweiAccountApi, HuaweiAccountBinding, HuaweiAccountBindingPage } from '../api/HuaweiAccountApi'
 import Constants from '../common/Constants'
+import { DateTimeUtils } from '../common/DateTimeUtils'
 import { EmptyState } from '../components/EmptyState'
 
 @Component
@@ -168,12 +169,13 @@ export struct HuaweiAccountManagementPage {
           .fontColor($r('app.color.text_primary'))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text('绑定主邮箱：' + item.primaryEmail)
-          .fontSize(Constants.FONT_SIZE_COMMON)
+        Text('主邮箱：' + item.primaryEmail)
+          .fontSize(Constants.FONT_SIZE_SMALL)
           .fontColor($r('app.color.text_secondary'))
-          .maxLines(1)
+          .maxLines(2)
+          .wordBreak(WordBreak.BREAK_ALL)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text('绑定时间：' + this.formatTime(item.createTime))
+        Text('绑定时间：' + DateTimeUtils.formatUtcDateTime(item.createTime, '未知'))
           .fontSize(Constants.FONT_SIZE_SMALL)
           .fontColor($r('app.color.text_tertiary'))
           .maxLines(1)
@@ -234,13 +236,6 @@ export struct HuaweiAccountManagementPage {
   private getAvatarText(item: HuaweiAccountBinding): string {
     const value: string = item.nickName === '' ? item.primaryEmail : item.nickName
     return value === '' ? '华' : value.substring(0, 1).toUpperCase()
-  }
-
-  private formatTime(value: string): string {
-    if (value === '') {
-      return '未知'
-    }
-    return value.replace('T', ' ').substring(0, Math.min(value.length, 16))
   }
 
   private showToast(message: string): void {

@@ -1,6 +1,7 @@
 ﻿import { ApiException, ApiResponse } from './HttpClient'
 import { EmailApi } from '../api/EmailApi'
 import { MailAttachment, MailItem } from './MailModels'
+import { DateTimeUtils } from './DateTimeUtils'
 
 class RemoteAttachment {
   filename: string | null = null
@@ -163,7 +164,7 @@ export class MailService {
     item.subject = subject
     item.body = text === '' ? content : text
     item.htmlContent = content
-    item.time = MailService.formatTime(remote.createTime)
+    item.time = DateTimeUtils.formatUtcDateTime(remote.createTime)
     item.unread = remote.unread === 0
     item.starred = remote.isStar === 1
     item.cc = MailService.toAddressList(remote.cc)
@@ -220,10 +221,4 @@ export class MailService {
     return result
   }
 
-  private static formatTime(value: string): string {
-    if (value.length <= 16) {
-      return value
-    }
-    return value.substring(0, 16).replace('T', ' ')
-  }
 }

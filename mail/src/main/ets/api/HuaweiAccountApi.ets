@@ -8,6 +8,10 @@ class RemoteHuaweiBinding {
   primaryEmail: string = ''
   profileUpdateTime: string = ''
   createTime: string = ''
+  userCreateTime: string = ''
+  receiveCount: number = 0
+  sentCount: number = 0
+  starCount: number = 0
 }
 
 class RemoteHuaweiBindingPage {
@@ -25,15 +29,40 @@ export class HuaweiAccountBinding {
   primaryEmail: string
   profileUpdateTime: string
   createTime: string
+  userCreateTime: string
+  receiveCount: number
+  sentCount: number
+  starCount: number
 
   constructor(source: RemoteHuaweiBinding) {
-    this.id = source.huaweiAccountId
-    this.huaweiUserId = source.huaweiUserId
-    this.nickName = source.nickName
-    this.avatarUrl = source.avatarUrl
-    this.primaryEmail = source.primaryEmail
-    this.profileUpdateTime = source.profileUpdateTime
-    this.createTime = source.createTime
+    this.id = source.huaweiAccountId === undefined ? 0 : source.huaweiAccountId
+    this.huaweiUserId = source.huaweiUserId === undefined ? '' : source.huaweiUserId
+    this.nickName = source.nickName === undefined ? '' : source.nickName
+    this.avatarUrl = source.avatarUrl === undefined ? '' : source.avatarUrl
+    this.primaryEmail = source.primaryEmail === undefined ? '' : source.primaryEmail
+    this.profileUpdateTime = source.profileUpdateTime === undefined ? '' : source.profileUpdateTime
+    this.createTime = source.createTime === undefined ? '' : source.createTime
+    this.userCreateTime = source.userCreateTime === undefined ? '' : source.userCreateTime
+    this.receiveCount = source.receiveCount === undefined ? 0 : source.receiveCount
+    this.sentCount = source.sentCount === undefined ? 0 : source.sentCount
+    this.starCount = source.starCount === undefined ? 0 : source.starCount
+  }
+
+  static fromCache(huaweiUserId: string, nickName: string, avatarUrl: string, primaryEmail: string,
+    profileUpdateTime: string, createTime: string, userCreateTime: string, receiveCount: number,
+    sentCount: number, starCount: number): HuaweiAccountBinding {
+    const remote: RemoteHuaweiBinding = new RemoteHuaweiBinding()
+    remote.huaweiUserId = huaweiUserId
+    remote.nickName = nickName
+    remote.avatarUrl = avatarUrl
+    remote.primaryEmail = primaryEmail
+    remote.profileUpdateTime = profileUpdateTime
+    remote.createTime = createTime
+    remote.userCreateTime = userCreateTime
+    remote.receiveCount = receiveCount
+    remote.sentCount = sentCount
+    remote.starCount = starCount
+    return new HuaweiAccountBinding(remote)
   }
 }
 

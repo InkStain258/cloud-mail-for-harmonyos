@@ -1,5 +1,5 @@
 ﻿import { hdsMaterial, HdsTabs, HdsTabsController } from "@kit.UIDesignKit"
-import { HdsNavigation } from "@kit.UIDesignKit"
+import { HdsNavigation, IconStyleMode } from "@kit.UIDesignKit"
 import { HdsNavigationTitleMode, ScrollEffectType } from "@kit.UIDesignKit"
 import { LengthMetrics, SymbolGlyphModifier } from "@kit.ArkUI"
 
@@ -24,6 +24,7 @@ import { HuaweiAccountManagementPage } from "./HuaweiAccountManagementPage"
 import { NotFoundPage } from "./NotFoundPage"
 import { SplashPage } from "./SplashPage"
 import Constants from "../common/Constants"
+import { AccountCenterSheetHost } from "../components/AccountCenterSheetHost"
 
 @Entry
 @Component
@@ -36,6 +37,9 @@ struct Index {
   @State showSplash: boolean = true
   @State inboxSearchText: string = ''
   @State isInboxSearchFocused: boolean = false
+  @State showAccountCenterSheet: boolean = false
+  @State huaweiAvatarUrl: string = ''
+  @State huaweiAvatarText: string = '华'
   private tabController: HdsTabsController = new HdsTabsController()
   private inboxSearchController: SearchController = new SearchController()
   private pathStack: NavPathStack = new NavPathStack()
@@ -160,7 +164,8 @@ struct Index {
               onManageRegistrationCodes: () => { this.pathStack.pushPathByName('RegistrationCodePage', undefined) },
               onManageHuaweiAccounts: () => {
                 this.pathStack.pushPathByName('HuaweiAccountManagementPage', undefined)
-              }
+              },
+              onOpenAccountCenter: () => { this.showAccountCenterSheet = true }
             })
           }
             .tabBar(new BottomTabBarStyle({
@@ -222,7 +227,19 @@ struct Index {
     .titleBar({
       content: {
         title: { mainTitle: this.getCurrentTitle() },
-        bottomBuilder: { builder: (): void => this.TitleBottomBuilder() }
+        bottomBuilder: { builder: (): void => this.TitleBottomBuilder() },
+        menu: {
+          maxCount: this.currentTab < 4 ? 1 : 0,
+          value: this.currentTab < 4 ? [{
+            content: {
+              label: '账号中心',
+              icon: this.huaweiAvatarUrl === '' ? $r('sys.symbol.person') : this.huaweiAvatarUrl,
+              type: IconStyleMode.LARGE,
+              isEnabled: true,
+              action: () => { this.showAccountCenterSheet = true }
+            }
+          }] : []
+        }
       },
       avoidLayoutSafeArea: true,
       style: {
@@ -262,6 +279,24 @@ struct Index {
       .width("100%")
       .height("100%")
       .backgroundColor($r("app.color.background"))
+      .blur(this.showAccountCenterSheet ? 12 : 0)
+    }
+
+    if (this.authToken !== '') {
+      AccountCenterSheetHost({
+        isShown: $showAccountCenterSheet,
+        onManageAccounts: () => {
+          this.pathStack.pushPathByName('AccountsPage', undefined)
+        },
+        onLogout: () => {
+          this.logout()
+        },
+        onIdentityChanged: (avatarUrl: string, avatarText: string) => {
+          this.huaweiAvatarUrl = avatarUrl
+          this.huaweiAvatarText = avatarText
+        }
+      })
+
     }
 
     // 应用内闪屏覆盖层：蓝底 + 半屏大图标，淡出后移除
