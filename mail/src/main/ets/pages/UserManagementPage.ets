@@ -2,8 +2,10 @@
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
 import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
+import { LengthMetrics } from '@kit.ArkUI'
 import { AdminResult, AdminRole, AdminService, AdminUser } from '../common/AdminService'
 import { EmptyState } from '../components/EmptyState'
+import { SessionService } from '../common/SessionService'
 
 @Component
 export struct UserManagementPage {
@@ -104,7 +106,8 @@ export struct UserManagementPage {
           }
           .width('100%')
           .height('100%')
-          .scrollBar(BarState.Off)
+      .scrollBar(BarState.Off)
+      .clip(false)
 
           if (this.showUserDialog) {
             this.UserDialog()
@@ -124,11 +127,19 @@ export struct UserManagementPage {
       style: {
         scrollEffectOpts: {
           enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
+        originalStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
         }
       }
     })
@@ -274,7 +285,7 @@ export struct UserManagementPage {
           .width('100%')
 
         if (!this.isEditing) {
-          Text('邮箱固定使用 ' + Constants.MAIL_DOMAIN + ' 后缀。')
+          Text('邮箱固定使用 ' + SessionService.getActiveMailDomain() + ' 后缀。')
             .fontSize(Constants.FONT_SIZE_SMALL)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')
@@ -289,7 +300,7 @@ export struct UserManagementPage {
               .borderRadius(Constants.RADIUS_SMALL)
               .padding({ left: Constants.PADDING_INNER, right: Constants.PADDING_INNER })
               .onChange((value: string) => { this.emailPrefix = value })
-            Text(Constants.MAIL_DOMAIN)
+            Text(SessionService.getActiveMailDomain())
               .fontSize(Constants.FONT_SIZE_COMMON)
               .fontColor($r('app.color.text_secondary'))
               .padding({ left: 8, right: 4 })
@@ -532,7 +543,8 @@ export struct UserManagementPage {
         this.showToast('请输入正确的邮箱账号')
         return
       }
-      result = await AdminService.createUser(this.emailPrefix.trim() + Constants.MAIL_DOMAIN, this.password, this.selectedRoleId)
+      result = await AdminService.createUser(
+        this.emailPrefix.trim() + SessionService.getActiveMailDomain(), this.password, this.selectedRoleId)
     }
     if (!result.success) {
       this.showToast(result.message)

@@ -2,6 +2,7 @@
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
 import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
+import { LengthMetrics } from '@kit.ArkUI'
 import { AdminPermission, AdminResult, AdminRole, AdminService } from '../common/AdminService'
 import { EmptyState } from '../components/EmptyState'
 
@@ -113,11 +114,19 @@ export struct RoleManagementPage {
       style: {
         scrollEffectOpts: {
           enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
+        originalStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
         }
       }
     })
@@ -268,6 +277,7 @@ export struct RoleManagementPage {
       .shadow(Constants.SHADOW_CARD)
       .constraintSize({ maxHeight: '84%' })
       .scrollBar(BarState.Off)
+      .clip(false)
     }
     .width('100%')
     .height('100%')

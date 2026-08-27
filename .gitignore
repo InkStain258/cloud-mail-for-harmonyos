@@ -1,4 +1,9 @@
 /node_modules
+**/node_modules
+**/.wrangler
+**/.dev.vars
+/release-assets/*.hap
+/release-assets/*.app
 /oh_modules
 /local.properties
 /.idea

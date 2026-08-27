@@ -2,6 +2,7 @@
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
 import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
+import { LengthMetrics } from '@kit.ArkUI'
 import { ApiException } from '../common/HttpClient'
 import { SystemSettings, SystemSettingsService } from '../common/SystemSettingsService'
 import { EmptyState } from '../components/EmptyState'
@@ -138,7 +139,8 @@ export struct SystemSettingsPage {
           .width('100%')
           .height('100%')
           .align(Alignment.TopStart)
-          .scrollBar(BarState.Off)
+      .scrollBar(BarState.Off)
+      .clip(false)
         }
         .width('100%')
         .height('100%')
@@ -151,11 +153,19 @@ export struct SystemSettingsPage {
       style: {
         scrollEffectOpts: {
           enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
+        originalStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
         }
       }
     })

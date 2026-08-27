@@ -1,9 +1,16 @@
 ﻿import { preferences } from '@kit.ArkData'
 
+import Constants from './Constants'
+import { InstanceRegistry } from './InstanceRegistry'
+import { MailInstance, PlatformInstance } from './InstanceModels'
+import { MailStatsStore } from './MailStatsStore'
+import { SecureTokenStore } from './SecureTokenStore'
+
 export class SessionService {
   private static sessionPreferences: preferences.Preferences | null = null
 
   static initialize(context: Context): void {
+    InstanceRegistry.initialize(context)
     let token: string = ''
     let email: string = ''
     let role: string = 'user'
@@ -11,11 +18,28 @@ export class SessionService {
     let accountId: number = 0
     try {
       SessionService.sessionPreferences = preferences.getPreferencesSync(context, { name: 'cloud_mail_auth' })
-      token = SessionService.sessionPreferences.getSync('token', '') as string
-      email = SessionService.sessionPreferences.getSync('email', '') as string
-      role = SessionService.sessionPreferences.getSync('role', 'user') as string
-      roleName = SessionService.sessionPreferences.getSync('roleName', '普通用户') as string
-      accountId = SessionService.sessionPreferences.getSync('accountId', 0) as number
+      const activeInstance: MailInstance = InstanceRegistry.getActiveInstance()
+      const legacyToken: string = SessionService.sessionPreferences.getSync('token', '') as string
+      token = SecureTokenStore.getInstanceToken(activeInstance.instanceId)
+      if (token === '' && legacyToken !== '') {
+        token = legacyToken
+        SecureTokenStore.saveInstanceToken(activeInstance.instanceId, legacyToken)
+        SessionService.sessionPreferences.deleteSync('token')
+        SessionService.sessionPreferences.flushSync()
+      }
+      email = activeInstance.localEmail
+      role = activeInstance.localRole
+      roleName = activeInstance.localRoleName
+      accountId = activeInstance.accountId
+      if (email === '') {
+        email = SessionService.sessionPreferences.getSync('email', '') as string
+        role = SessionService.sessionPreferences.getSync('role', 'user') as string
+        roleName = SessionService.sessionPreferences.getSync('roleName', '普通用户') as string
+        accountId = SessionService.sessionPreferences.getSync('accountId', 0) as number
+        if (email !== '') {
+          InstanceRegistry.updateSession(activeInstance.instanceId, email, role, roleName, accountId)
+        }
+      }
     } catch (err) {
       console.error('initialize session preferences failed')
     }
@@ -25,20 +49,26 @@ export class SessionService {
     AppStorage.setOrCreate('authRoleName', roleName)
     AppStorage.setOrCreate('currentAccountId', accountId)
     AppStorage.setOrCreate('sessionRevision', 0)
+    AppStorage.setOrCreate('instanceRevision', 0)
+    SessionService.applyActiveInstanceStorage()
   }
 
   static saveSession(token: string, email: string, role: string, roleName: string, accountId: number): void {
+    MailStatsStore.setOwner(email)
     AppStorage.set('authToken', token)
     AppStorage.set('authEmail', email)
     AppStorage.set('authRole', role)
     AppStorage.set('authRoleName', roleName)
     AppStorage.set('currentAccountId', accountId)
+    const activeInstanceId: string = InstanceRegistry.getActiveInstanceId()
+    SecureTokenStore.saveInstanceToken(activeInstanceId, token)
+    InstanceRegistry.updateSession(activeInstanceId, email, role, roleName, accountId)
+    SessionService.applyActiveInstanceStorage()
     SessionService.notifySessionChanged()
     if (SessionService.sessionPreferences === null) {
       return
     }
     try {
-      SessionService.sessionPreferences.putSync('token', token)
       SessionService.sessionPreferences.putSync('email', email)
       SessionService.sessionPreferences.putSync('role', role)
       SessionService.sessionPreferences.putSync('roleName', roleName)
@@ -50,17 +80,20 @@ export class SessionService {
   }
 
   static clearSession(): void {
+    MailStatsStore.reset()
     AppStorage.set('authToken', '')
     AppStorage.set('authEmail', '')
     AppStorage.set('authRole', 'user')
     AppStorage.set('authRoleName', '普通用户')
     AppStorage.set('currentAccountId', 0)
+    const activeInstanceId: string = InstanceRegistry.getActiveInstanceId()
+    SecureTokenStore.removeInstanceToken(activeInstanceId)
+    InstanceRegistry.updateSession(activeInstanceId, '', 'user', '普通用户', 0)
     SessionService.notifySessionChanged()
     if (SessionService.sessionPreferences === null) {
       return
     }
     try {
-      SessionService.sessionPreferences.deleteSync('token')
       SessionService.sessionPreferences.deleteSync('email')
       SessionService.sessionPreferences.deleteSync('role')
       SessionService.sessionPreferences.deleteSync('roleName')
@@ -71,13 +104,162 @@ export class SessionService {
     }
   }
 
+  static clearAllSessions(): void {
+    const instances: MailInstance[] = InstanceRegistry.getInstances()
+    for (let index = 0; index < instances.length; index++) {
+      SecureTokenStore.removeInstanceToken(instances[index].instanceId)
+      if (instances[index].instanceId === InstanceRegistry.getDefaultInstanceId()) {
+        InstanceRegistry.updateSession(instances[index].instanceId, '', 'user', '普通用户', 0, 'MEMBER')
+      } else {
+        InstanceRegistry.remove(instances[index].instanceId)
+      }
+    }
+    InstanceRegistry.setActiveInstance(InstanceRegistry.getDefaultInstanceId())
+    MailStatsStore.reset()
+    AppStorage.set('authToken', '')
+    AppStorage.set('authEmail', '')
+    AppStorage.set('authRole', 'user')
+    AppStorage.set('authRoleName', '普通用户')
+    AppStorage.set('currentAccountId', 0)
+    SessionService.applyActiveInstanceStorage()
+    SessionService.notifySessionChanged()
+    SessionService.notifyInstanceChanged()
+    if (SessionService.sessionPreferences === null) {
+      return
+    }
+    try {
+      SessionService.sessionPreferences.clearSync()
+      SessionService.sessionPreferences.flushSync()
+    } catch (err) {
+      console.error('clear all session preferences failed')
+    }
+  }
+
   static getToken(): string {
     const token: string | undefined = AppStorage.get('authToken') as string | undefined
     return token === undefined ? '' : token
   }
 
+  static getApiBaseUrl(): string {
+    const instance: MailInstance = InstanceRegistry.getActiveInstance()
+    return instance.apiBaseUrl === '' ? Constants.API_URL : instance.apiBaseUrl
+  }
+
+  static getActiveInstanceId(): string {
+    return InstanceRegistry.getActiveInstanceId()
+  }
+
+  static getActiveMailDomain(): string {
+    const instance: MailInstance = InstanceRegistry.getActiveInstance()
+    const email: string = instance.localEmail
+    const separator: number = email.lastIndexOf('@')
+    if (separator > 0 && separator < email.length - 1) {
+      return email.substring(separator)
+    }
+    return Constants.MAIL_DOMAIN
+  }
+
+  static switchInstance(instanceId: string): boolean {
+    const instance: MailInstance | null = InstanceRegistry.find(instanceId)
+    if (instance === null || !InstanceRegistry.setActiveInstance(instanceId)) {
+      return false
+    }
+    const token: string = SecureTokenStore.getInstanceToken(instanceId)
+    AppStorage.set('authToken', token)
+    AppStorage.set('authEmail', instance.localEmail)
+    AppStorage.set('authRole', instance.localRole)
+    AppStorage.set('authRoleName', instance.localRoleName)
+    AppStorage.set('currentAccountId', instance.accountId)
+    MailStatsStore.setOwner(instance.localEmail)
+    SessionService.applyActiveInstanceStorage()
+    SessionService.notifySessionChanged()
+    SessionService.notifyInstanceChanged()
+    return token !== ''
+  }
+
+  static saveInstanceSession(instance: MailInstance, token: string): void {
+    InstanceRegistry.save(instance)
+    SecureTokenStore.saveInstanceToken(instance.instanceId, token)
+  }
+
+  static removeInstanceSession(instanceId: string): boolean {
+    if (instanceId === InstanceRegistry.getDefaultInstanceId()) {
+      return false
+    }
+    const wasActive: boolean = InstanceRegistry.getActiveInstanceId() === instanceId
+    SecureTokenStore.removeInstanceToken(instanceId)
+    const removed: boolean = InstanceRegistry.remove(instanceId)
+    if (removed) {
+      if (wasActive) {
+        SessionService.applyActiveSession()
+      } else {
+        SessionService.applyActiveInstanceStorage()
+        SessionService.notifyInstanceChanged()
+      }
+    }
+    return removed
+  }
+
+  static synchronizeInstanceMetadata(instances: PlatformInstance[]): void {
+    let changed: boolean = false
+    for (let index = 0; index < instances.length; index++) {
+      if (InstanceRegistry.updateMetadata(
+        instances[index].instanceId,
+        instances[index].displayName,
+        instances[index].apiBaseUrl,
+        instances[index].originHost)) {
+        changed = true
+      }
+    }
+    if (changed) {
+      SessionService.applyActiveInstanceStorage()
+      SessionService.notifyInstanceChanged()
+    }
+  }
+
+  static updateInstanceMetadata(instanceId: string, displayName: string): void {
+    if (!InstanceRegistry.updateMetadata(instanceId, displayName)) {
+      return
+    }
+    SessionService.applyActiveInstanceStorage()
+    SessionService.notifyInstanceChanged()
+  }
+
+  static getInstanceToken(instanceId: string): string {
+    return SecureTokenStore.getInstanceToken(instanceId)
+  }
+
   private static notifySessionChanged(): void {
     const revision: number | undefined = AppStorage.get('sessionRevision') as number | undefined
     AppStorage.set('sessionRevision', revision === undefined ? 1 : revision + 1)
+  }
+
+  private static applyActiveSession(): void {
+    const instance: MailInstance = InstanceRegistry.getActiveInstance()
+    const token: string = SecureTokenStore.getInstanceToken(instance.instanceId)
+    AppStorage.set('authToken', token)
+    AppStorage.set('authEmail', instance.localEmail)
+    AppStorage.set('authRole', instance.localRole)
+    AppStorage.set('authRoleName', instance.localRoleName)
+    AppStorage.set('currentAccountId', instance.accountId)
+    MailStatsStore.setOwner(instance.localEmail)
+    SessionService.applyActiveInstanceStorage()
+    SessionService.notifySessionChanged()
+    SessionService.notifyInstanceChanged()
+  }
+
+  private static notifyInstanceChanged(): void {
+    const revision: number | undefined = AppStorage.get('instanceRevision') as number | undefined
+    AppStorage.set('instanceRevision', revision === undefined ? 1 : revision + 1)
+  }
+
+  private static applyActiveInstanceStorage(): void {
+    const instance: MailInstance = InstanceRegistry.getActiveInstance()
+    AppStorage.setOrCreate('activeInstanceId', instance.instanceId)
+    AppStorage.setOrCreate('activeInstanceName', instance.displayName)
+    AppStorage.setOrCreate('activeInstanceApiBaseUrl', instance.apiBaseUrl)
+    AppStorage.set('activeInstanceId', instance.instanceId)
+    AppStorage.set('activeInstanceName', instance.displayName)
+    AppStorage.set('activeInstanceApiBaseUrl', instance.apiBaseUrl)
   }
 }

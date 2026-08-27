@@ -1,11 +1,13 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { ApiException } from '../common/HttpClient'
+import { LengthMetrics } from '@kit.ArkUI'
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
 import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
 import { AccountResult, AccountService, ManagedAccount } from '../common/AccountService'
 import { AccountCard } from '../components/AccountCard'
 import { EmptyState } from '../components/EmptyState'
+import { SessionService } from '../common/SessionService'
 
 @Component
 export struct AccountsPage {
@@ -37,7 +39,7 @@ export struct AccountsPage {
                 .fontSize(Constants.FONT_SIZE_TITLE)
                 .fontWeight(FontWeight.Bold)
                 .fontColor($r('app.color.text_primary'))
-              Text('副邮箱固定使用 ' + Constants.MAIL_DOMAIN + '，由主邮箱统一收发与管理。')
+              Text('副邮箱固定使用 ' + SessionService.getActiveMailDomain() + '，由主邮箱统一收发与管理。')
                 .fontSize(Constants.FONT_SIZE_COMMON)
                 .fontColor($r('app.color.text_secondary'))
                 .margin({ top: 4 })
@@ -77,6 +79,8 @@ export struct AccountsPage {
             .width('100%')
             .layoutWeight(1)
             .scrollBar(BarState.Off)
+            .clip(false)
+            .cachedCount(3, true)
             .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
           }
         }
@@ -101,11 +105,19 @@ export struct AccountsPage {
       style: {
         scrollEffectOpts: {
           enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
+        originalStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
         }
       }
     })
@@ -146,7 +158,7 @@ export struct AccountsPage {
             .borderRadius(Constants.RADIUS_SMALL)
             .padding({ left: Constants.PADDING_INNER, right: Constants.PADDING_INNER })
             .onChange((value: string) => { this.secondaryEmail = value })
-          Text(Constants.MAIL_DOMAIN)
+          Text(SessionService.getActiveMailDomain())
             .fontSize(Constants.FONT_SIZE_COMMON)
             .fontColor($r('app.color.text_secondary'))
             .padding({ left: 8, right: 8 })
@@ -286,7 +298,7 @@ export struct AccountsPage {
   }
 
   private getFullSecondaryEmail(): string {
-    return this.secondaryEmail.trim() + Constants.MAIL_DOMAIN
+    return this.secondaryEmail.trim() + SessionService.getActiveMailDomain()
   }
 
   private showToast(message: string): void {

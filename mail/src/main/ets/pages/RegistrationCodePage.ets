@@ -1,5 +1,6 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { HdsNavDestination, HdsNavDestinationTitleMode } from '@kit.UIDesignKit'
+import { LengthMetrics } from '@kit.ArkUI'
 import { ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit'
 import Constants from '../common/Constants'
 import { AdminResult, AdminRole, AdminService, RegistrationCode } from '../common/AdminService'
@@ -82,7 +83,8 @@ export struct RegistrationCodePage {
           .width('100%')
           .height('100%')
           .align(Alignment.TopStart)
-          .scrollBar(BarState.Off)
+      .scrollBar(BarState.Off)
+      .clip(false)
           if (this.showGenerateDialog) {
             this.GenerateCodeDialog()
           }
@@ -101,11 +103,19 @@ export struct RegistrationCodePage {
       style: {
         scrollEffectOpts: {
           enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
+        originalStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 }
         }
       }
     })

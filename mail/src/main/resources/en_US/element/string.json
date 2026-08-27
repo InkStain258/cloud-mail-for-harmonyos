@@ -10,111 +10,111 @@
     },
     {
       "name": "MailAbility_label",
-      "value": "云笺集"
+      "value": "Yunjianji"
     },
     {
       "name": "instance_switch_title",
-      "value": "在不同 Cloud Mail 服务之间安全切换"
+      "value": "Switch securely between Cloud Mail services"
     },
     {
       "name": "instance_switch_description",
-      "value": "邮箱密码只会发送到所选服务；云笺集中心仅保存华为账号与已验证邮箱的绑定关系。"
+      "value": "Mailbox passwords are sent only to the selected service. Yunjianji stores only verified Huawei account and mailbox bindings."
     },
     {
       "name": "instance_search_placeholder",
-      "value": "搜索服务名称、域名或邮箱"
+      "value": "Search services, domains, or mailboxes"
     },
     {
       "name": "settings_theme_system",
-      "value": "跟随系统"
+      "value": "System"
     },
     {
       "name": "settings_theme_light",
-      "value": "浅色"
+      "value": "Light"
     },
     {
       "name": "settings_theme_dark",
-      "value": "深色"
+      "value": "Dark"
     },
     {
       "name": "account_center_unavailable",
-      "value": "账号中心暂不可用"
+      "value": "Account center is unavailable"
     },
     {
       "name": "instance_page_title",
-      "value": "邮箱服务"
+      "value": "Mail Services"
     },
     {
       "name": "instance_add_action",
-      "value": "添加邮箱服务"
+      "value": "Add mail service"
     },
     {
       "name": "instance_manage_action",
-      "value": "管理邮箱服务"
+      "value": "Manage mail services"
     },
     {
       "name": "instance_manage_title",
-      "value": "管理邮箱服务"
+      "value": "Manage Mail Services"
     },
     {
       "name": "instance_manage_description",
-      "value": "修改服务显示名称，或移除不再使用的邮箱服务。"
+      "value": "Rename services or remove ones that are no longer in use."
     },
     {
       "name": "instance_manage_empty",
-      "value": "暂无可管理的邮箱服务"
+      "value": "No mail services to manage"
     },
     {
       "name": "instance_manage_item_action",
-      "value": "管理"
+      "value": "Manage"
     },
     {
       "name": "instance_main_badge",
-      "value": "主服务"
+      "value": "Primary"
     },
     {
       "name": "instance_name_label",
-      "value": "服务名称"
+      "value": "Service name"
     },
     {
       "name": "instance_name_placeholder",
-      "value": "输入服务显示名称"
+      "value": "Enter a display name"
     },
     {
       "name": "instance_save_action",
-      "value": "保存名称"
+      "value": "Save name"
     },
     {
       "name": "instance_saving",
-      "value": "正在保存"
+      "value": "Saving"
     },
     {
       "name": "instance_delete_action",
-      "value": "删除服务"
+      "value": "Delete service"
     },
     {
       "name": "instance_delete_description",
-      "value": "删除后，所有用户将无法再通过云笺集访问此服务。"
+      "value": "After deletion, users can no longer access this service through Yunjianji."
     },
     {
       "name": "instance_main_delete_disabled",
-      "value": "云笺集主服务不可删除。"
+      "value": "The primary Yunjianji service cannot be deleted."
     },
     {
       "name": "instance_delete_confirm_title",
-      "value": "删除邮箱服务？"
+      "value": "Delete mail service?"
     },
     {
       "name": "instance_delete_confirm_message",
-      "value": "删除后，该服务及其绑定关系将从云笺集中停用，此操作无法在应用内撤销。"
+      "value": "This service and its bindings will be disabled in Yunjianji. This cannot be undone in the app."
     },
     {
       "name": "common_close",
-      "value": "关闭"
+      "value": "Close"
     },
     {
       "name": "common_cancel",
-      "value": "取消"
+      "value": "Cancel"
     }
   ]
 }

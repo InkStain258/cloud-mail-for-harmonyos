@@ -2,6 +2,7 @@
 import { EmailApi } from '../api/EmailApi'
 import { MailAttachment, MailItem } from './MailModels'
 import { DateTimeUtils } from './DateTimeUtils'
+import { MailStatsStore } from './MailStatsStore'
 
 class RemoteAttachment {
   filename: string | null = null
@@ -70,6 +71,7 @@ class SendMailRequest {
 export class MailService {
   static initialize(): void {
     AppStorage.setOrCreate('mailRevision', 0)
+    MailStatsStore.initialize()
   }
 
   static async loadInbox(): Promise<MailItem[]> {
@@ -81,20 +83,28 @@ export class MailService {
     // 收件箱按当前用户聚合主邮箱和全部副邮箱，服务端 allReceive=1 会忽略单个 accountId 过滤。
     const response: ApiResponse = await EmailApi.list(MailService.getCurrentAccountId(), 1, emailId, 0, 50, 0)
     if (response.data === null) {
+      MailStatsStore.syncReceive(0)
       return new MailPage([], 0)
     }
     const remoteData: RemoteMailList = response.data as RemoteMailList
-    return new MailPage(MailService.toItems(response), remoteData.total)
+    const items: MailItem[] = MailService.toItems(response)
+    const total: number = Math.max(remoteData.total, items.length)
+    MailStatsStore.syncReceive(total)
+    return new MailPage(items, total)
   }
 
   static async loadSent(): Promise<MailItem[]> {
     const response: ApiResponse = await EmailApi.list(MailService.getCurrentAccountId(), 0, 0, 0, 50, 1)
-    return MailService.toItems(response)
+    const items: MailItem[] = MailService.toItems(response)
+    MailStatsStore.syncSent(MailService.getRemoteTotal(response, items.length))
+    return items
   }
 
   static async loadStarred(): Promise<MailItem[]> {
     const response: ApiResponse = await EmailApi.listStarred(0, 50)
-    return MailService.toItems(response)
+    const items: MailItem[] = MailService.toItems(response)
+    MailStatsStore.syncStar(MailService.getRemoteTotal(response, items.length))
+    return items
   }
 
   static async markRead(emailId: number): Promise<void> {
@@ -107,6 +117,7 @@ export class MailService {
     } else {
       await EmailApi.cancelStar(emailId)
     }
+    MailStatsStore.adjustStar(starred ? 1 : -1)
     MailService.notifyChange()
   }
 
@@ -127,6 +138,8 @@ export class MailService {
     const request: SendMailRequest = new SendMailRequest(MailService.getCurrentAccountId(), recipients, subject, content,
       sendType, emailId, attachments)
     await EmailApi.send(JSON.stringify(request))
+    MailStatsStore.incrementSent()
+    MailService.notifyChange()
   }
 
   private static getCurrentAccountId(): number {
@@ -137,6 +150,14 @@ export class MailService {
   private static notifyChange(): void {
     const revision: number | undefined = AppStorage.get('mailRevision') as number | undefined
     AppStorage.set('mailRevision', revision === undefined ? 1 : revision + 1)
+  }
+
+  private static getRemoteTotal(response: ApiResponse, fallback: number): number {
+    if (response.data === null) {
+      return 0
+    }
+    const remoteData: RemoteMailList = response.data as RemoteMailList
+    return Math.max(remoteData.total, fallback)
   }
 
   private static toItems(response: ApiResponse): MailItem[] {

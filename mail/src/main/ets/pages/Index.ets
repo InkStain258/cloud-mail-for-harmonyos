@@ -21,6 +21,7 @@ import { RoleManagementPage } from "./RoleManagementPage"
 import { AnalyticsPage } from "./AnalyticsPage"
 import { RegistrationCodePage } from "./RegistrationCodePage"
 import { HuaweiAccountManagementPage } from "./HuaweiAccountManagementPage"
+import { InstanceManagementPage } from './InstanceManagementPage'
 import { NotFoundPage } from "./NotFoundPage"
 import { SplashPage } from "./SplashPage"
 import Constants from "../common/Constants"
@@ -31,6 +32,7 @@ import { AccountCenterSheetHost } from "../components/AccountCenterSheetHost"
 struct Index {
   @State currentTab: number = 0
   @StorageLink('authToken') authToken: string = ''
+  @StorageLink('instanceRevision') @Watch('onInstanceChanged') instanceRevision: number = 0
   @StorageLink('safeAreaTopPx') safeAreaTopPx: number = 0
   @StorageLink('safeAreaBottomPx') safeAreaBottomPx: number = 0
   @StorageProp('currentBreakpoint') currentBreakpoint: string = 'sm'
@@ -198,6 +200,7 @@ struct Index {
         })
         .width("100%")
         .height("100%")
+        .id('home-tabs-' + this.instanceRevision.toString())
 
         Row() {
           SymbolGlyph($r("sys.symbol.square_and_pencil_fill"))
@@ -288,6 +291,9 @@ struct Index {
         onManageAccounts: () => {
           this.pathStack.pushPathByName('AccountsPage', undefined)
         },
+        onManageInstances: () => {
+          this.pathStack.pushPathByName('InstanceManagementPage', undefined)
+        },
         onLogout: () => {
           this.logout()
         },
@@ -316,6 +322,13 @@ struct Index {
   private logout(): void {
     AuthService.logout()
     this.currentTab = 0
+  }
+
+  private onInstanceChanged(): void {
+    this.currentTab = 0
+    this.pathStack.clear()
+    this.isHomePrepared = false
+    this.prepareHome()
   }
 
   private async refreshUserIdentity(): Promise<void> {
@@ -406,6 +419,12 @@ struct Index {
       RegistrationCodePage()
     } else if (name === 'HuaweiAccountManagementPage') {
       HuaweiAccountManagementPage()
+    } else if (name === 'InstanceManagementPage') {
+      InstanceManagementPage({
+        onInstanceSwitched: () => {
+          this.onInstanceChanged()
+        }
+      })
     } else {
       NotFoundPage()
     }

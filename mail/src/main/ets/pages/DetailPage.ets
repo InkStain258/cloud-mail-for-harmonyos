@@ -225,7 +225,7 @@ export struct DetailPageContent {
         .width("100%")
         .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
       }
-      .width("100%").height("100%").scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring)
+    .width("100%").height("100%").scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring).clip(false)
 
         Row() {
           HdsActionBar({
@@ -268,13 +268,16 @@ export struct DetailPageContent {
       style: {
         scrollEffectOpts: {
           enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
         },
         originalStyle: {
+          backgroundStyle: { maskExtraHeight: 0 },
           contentStyle: {
             titleStyle: { mainTitleColor: $r("app.color.text_primary"), subTitleColor: $r("app.color.text_secondary") },
             menuStyle: { iconColor: $r("app.color.text_primary") },
@@ -282,6 +285,7 @@ export struct DetailPageContent {
           }
         },
         scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 },
           contentStyle: {
             titleStyle: { mainTitleColor: $r("app.color.text_primary"), subTitleColor: $r("app.color.text_secondary") },
             menuStyle: { iconColor: $r("app.color.text_primary") },

@@ -1,4 +1,6 @@
-import { ApiException, ApiResponse, HttpClient, QueryParameter } from '../common/HttpClient'
+﻿import { ApiException, ApiResponse, HttpClient, QueryParameter } from '../common/HttpClient'
+import { ExternalHttpClient } from '../common/ExternalHttpClient'
+import { InstanceService } from '../common/InstanceService'
 
 class RemoteHuaweiBinding {
   huaweiAccountId: number = 0
@@ -82,7 +84,12 @@ export class HuaweiAccountBindingPage {
 
 export class HuaweiAccountApi {
   static async current(): Promise<HuaweiAccountBinding | null> {
-    const response: ApiResponse = await HttpClient.get('/huawei/me')
+    const anchorToken: string = InstanceService.getAnchorToken()
+    const anchorApiBaseUrl: string = InstanceService.getAnchorApiBaseUrl()
+    if (anchorToken === '' || anchorApiBaseUrl === '') {
+      throw new ApiException(401, '主服务登录已失效，请重新登录华为账号', false)
+    }
+    const response: ApiResponse = await ExternalHttpClient.get(anchorApiBaseUrl, '/huawei/me', anchorToken)
     if (response.data === null) {
       return null
     }

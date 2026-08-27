@@ -1,0 +1,28 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "yunjianji-cloud-control",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-08-20",
+	"observability": {
+		"enabled": true
+	},
+	"routes": [
+		{
+			"pattern": "control.riordon.xyz",
+			"custom_domain": true
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "yunjianji-platform",
+			"database_id": "b93f614e-aeba-41bc-a205-8b81e263e21e",
+			"migrations_dir": "migrations"
+		}
+	],
+	"vars": {
+		"ALLOWED_ORIGINS": "",
+		"ANCHOR_INSTANCE_API_BASE_URL": "https://mail.riordon.xyz/api",
+		"SUPER_ADMIN_HUAWEI_IDS": "anchor:admin@riordon.xyz"
+	}
+}

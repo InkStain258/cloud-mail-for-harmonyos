@@ -3,7 +3,7 @@ import { ApiException } from '../common/HttpClient'
 import { DraftService } from '../common/DraftService'
 import { MailAttachment } from '../common/MailModels'
 import { MailService } from '../common/MailService'
-import { PromptAction } from '@kit.ArkUI'
+import { LengthMetrics, PromptAction } from '@kit.ArkUI'
 import { util } from '@kit.ArkTS'
 import { fileIo, picker } from '@kit.CoreFileKit'
 import { HdsNavDestination, HdsNavDestinationAttribute, HdsNavDestinationTitleMode, ScrollEffectType, hdsMaterial } from "@kit.UIDesignKit"
@@ -171,7 +171,7 @@ export struct ComposePageContent {
       }
       .width("100%").height("100%")
       .padding({ bottom: this.getUIContext().px2vp(this.safeAreaBottomPx) })
-      .scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring)
+      .scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring).clip(false)
     }
     .titleBar({
       content: { title: { mainTitle: "写邮件" } },
@@ -180,19 +180,23 @@ export struct ComposePageContent {
       style: {
         scrollEffectOpts: {
           enableScrollEffect: true,
-          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
         },
         originalStyle: {
+          backgroundStyle: { maskExtraHeight: 0 },
           contentStyle: {
             titleStyle: { mainTitleColor: $r("app.color.text_primary") },
             backIconStyle: { iconColor: $r("app.color.text_primary") }
           }
         },
         scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 },
           contentStyle: {
             titleStyle: { mainTitleColor: $r("app.color.text_primary") },
             backIconStyle: { iconColor: $r("app.color.text_primary") }

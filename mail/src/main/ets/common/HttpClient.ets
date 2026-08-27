@@ -1,5 +1,4 @@
 ﻿import { http } from '@kit.NetworkKit'
-import Constants from './Constants'
 import { SessionService } from './SessionService'
 
 export class ApiResponse {
@@ -166,8 +165,8 @@ export class HttpClient {
       return path
     }
     if (path.indexOf('/') === 0) {
-      return Constants.API_URL + path
+      return SessionService.getApiBaseUrl() + path
     }
-    return Constants.API_URL + '/' + path
+    return SessionService.getApiBaseUrl() + '/' + path
   }
 }

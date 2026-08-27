@@ -1,13 +1,15 @@
 ﻿import { PromptAction } from '@kit.ArkUI'
 import { bundleManager, common, ConfigurationConstant } from '@kit.AbilityKit'
+import { CapsuleSegmentButtonV2, LengthMetrics, SegmentButtonV2Items } from '@kit.ArkUI'
 import { pasteboard } from '@kit.BasicServicesKit'
 import {
-  BlurStrategy,
   HdsListItemCard,
   HdsNavDestination,
   HdsNavDestinationTitleMode,
   IconSize,
+  IconStyleMode,
   PrefixIcon,
+  ScrollEffectType,
   SuffixTextAndArrow,
   hdsMaterial
 } from '@kit.UIDesignKit'
@@ -16,6 +18,7 @@ import { HuaweiAccountApi, HuaweiAccountBinding } from '../api/HuaweiAccountApi'
 import { ProfileApi } from '../api/ProfileApi'
 import { DateTimeUtils } from '../common/DateTimeUtils'
 import { HuaweiAccountCache } from '../common/HuaweiAccountCache'
+import { MailStatsStore } from '../common/MailStatsStore'
 import { setAppColorMode } from '../mailability/MailAbility'
 
 class ChangeLogItem {
@@ -33,13 +36,17 @@ class ChangeLogItem {
 @Component
 export struct SettingsPage {
   scroller: Scroller = new Scroller()
+  private aboutScroller: Scroller = new Scroller()
+  private changeLogScroller: Scroller = new Scroller()
+  private fallbackAccountScroller: Scroller = new Scroller()
+  private fallbackSettingsScroller: Scroller = new Scroller()
   @Prop topContentInset: number = Constants.TITLE_BAR_HEIGHT_MINI
   @StorageLink('authEmail') authEmail: string = ''
   @StorageLink('authRole') authRole: string = 'user'
+  @StorageLink('platformRole') platformRole: string = 'MEMBER'
   @StorageLink('authRoleName') authRoleName: string = '普通用户'
   @StorageLink('currentColorMode') currentColorMode: number = ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET
   @State showLogoutConfirm: boolean = false
-  @State showThemeDialog: boolean = false
   @State showAboutSheet: boolean = false
   @State showAccountCenterSheet: boolean = false
   @State showPersonalSettingsSheet: boolean = false
@@ -55,20 +62,35 @@ export struct SettingsPage {
   @State huaweiPrimaryEmail: string = ''
   @State huaweiUserId: string = ''
   @State userCreateTime: string = ''
-  @State receiveMailCount: number = 0
-  @State sentMailCount: number = 0
-  @State starMailCount: number = 0
+  @StorageLink('mailReceiveCount') receiveMailCount: number = 0
+  @StorageLink('mailSentCount') sentMailCount: number = 0
+  @StorageLink('mailStarCount') starMailCount: number = 0
   @State huaweiIdentityLoaded: boolean = false
+  private readonly themeItems: SegmentButtonV2Items = new SegmentButtonV2Items([
+    { text: $r('app.string.settings_theme_system') },
+    { text: $r('app.string.settings_theme_light') },
+    { text: $r('app.string.settings_theme_dark') }
+  ])
   private readonly repositoryUrl: string = 'https://github.com/Riordon666/cloud-mail-for-harmonyos'
   private readonly telegramGroupUrl: string = 'https://t.me/CloudMailforHarmonyOSGroup'
   private readonly changeLogs: ChangeLogItem[] = [
+    new ChangeLogItem('1.2.0', '2026.08.27', [
+      '新增多邮箱服务实例接入与切换',
+      '支持一个华为账号绑定多个实例主邮箱',
+      '新增平台管理员多邮箱绑定数量与详情查询',
+      '账号中心集中展示当前华为账号绑定的全部主邮箱',
+      '优化第三方邮箱服务账号验证与地址兼容性',
+      '优化邮箱服务入口尺寸与个人设置卡片样式'
+    ]),
     new ChangeLogItem('1.1.1', '2026.07.29', [
       '新增华为账号中心，集中展示账号资料、邮箱统计与注册时间',
       '新增账号管理、账号设置和退出登录快捷入口',
       '在邮箱主页标题栏加入华为账号头像入口',
       '优化华为账号资料缓存与主邮箱显示',
       '软件内时间显示时区从服务器 UTC+0 调整为北京时间 UTC+8',
-      '完善账号中心半模态背景模糊、布局间距和交互体验'
+      '完善账号中心半模态背景模糊、布局间距和交互体验',
+      '外观与主题改为跟随系统、浅色、深色三段式快捷切换',
+      '账号中心邮件统计随收件、发送和星标操作实时刷新'
     ]),
     new ChangeLogItem('1.1.0', '2026.07.26', [
       '新增华为账号一键登录与主邮箱绑定',
@@ -170,84 +192,80 @@ export struct SettingsPage {
           .width('100%')
           .padding(Constants.PADDING_EDGE)
           .borderRadius(Constants.RADIUS_CARD)
-          .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK,
-            { adaptiveColor: AdaptiveColor.DEFAULT })
+          .backgroundColor($r('app.color.card'))
           .border({ width: 1, color: $r('app.color.divider') })
           .onClick(() => {
             if (this.onOpenAccountCenter) {
               this.onOpenAccountCenter()
             } else {
-              this.showAccountCenterSheet = true
+              this.showToast($r('app.string.account_center_unavailable'))
             }
-          })
-          .bindSheet($$this.showAccountCenterSheet, this.AccountCenterSheet(), {
-            height: '84%',
-            dragBar: false,
-            showClose: false,
-            blurStyle: BlurStyle.COMPONENT_THICK,
-            maskColor: 0x1A000000,
-            enableOutsideInteractive: false
           })
 
           this.SectionTitle('账户与偏好')
           Column() {
-            this.SettingsRow('账号管理', '主邮箱与副邮箱', '', $r('sys.symbol.person'), () => { this.openAccountManagement() })
+            this.SettingsCard('账号管理', '主邮箱与副邮箱', '', $r('sys.symbol.person'), () => { this.openAccountManagement() })
             Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
             this.ThemeSettingsRow()
           }
           .width('100%')
           .borderRadius(Constants.RADIUS_CARD)
-          .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK,
-            { adaptiveColor: AdaptiveColor.DEFAULT })
+          .backgroundColor($r('app.color.card'))
           .border({ width: 1, color: $r('app.color.divider') })
 
           this.SectionTitle('隐私与支持')
           Column() {
-            this.SettingsRow('隐私政策', '了解数据使用方式', '', $r('sys.symbol.lock_shield'), () => { this.openPrivacyPolicy() })
+            this.SettingsCard('隐私政策', '了解数据使用方式', '', $r('sys.symbol.lock_shield'), () => { this.openPrivacyPolicy() })
             Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
-            this.SettingsRow('关于', '云笺集 · HarmonyOS 原生邮件客户端', this.getAppVersionLabel(),
+            this.SettingsCard('关于', '云笺集 · HarmonyOS 原生邮件客户端', this.getAppVersionLabel(),
               $r('sys.symbol.questionmark_circle'), () => {
                 this.showAboutSheet = true
               })
           }
           .width('100%')
           .borderRadius(Constants.RADIUS_CARD)
-          .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK,
-            { adaptiveColor: AdaptiveColor.DEFAULT })
+          .backgroundColor($r('app.color.card'))
           .border({ width: 1, color: $r('app.color.divider') })
 
-          if (this.authRole === 'admin') {
+          if (this.shouldShowAdminSection()) {
             this.SectionTitle('管理员专区')
             Column() {
-              this.SettingsRow('系统设置', '网站与注册策略', '', $r('sys.symbol.gearshape'), () => { this.openSystemSettings() })
-              Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
-              this.SettingsRow('用户管理', '用户状态与角色', '', $r('sys.symbol.person'), () => { this.openUserManagement() })
-              Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
-              this.SettingsRow('全部邮件', '全局邮件管理', '', $r('sys.symbol.envelope'), () => { this.openGlobalMailManagement() })
-              Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
-              this.SettingsRow('角色权限', '角色与权限树', '', $r('sys.symbol.person_fill'), () => { this.openRoleManagement() })
-              Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
-              this.SettingsRow('数据分析', '平台数据概览', '', $r('sys.symbol.doc'), () => { this.openAnalytics() })
-              Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
-              this.SettingsRow('注册码管理', '生成与使用记录', '', $r('sys.symbol.star_fill'), () => { this.openRegistrationCodeManagement() })
-              Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
-              this.SettingsRow('华为账号绑定', '查看华为账号与主邮箱关系', '', $r('sys.symbol.person_2'), () => {
-                this.openHuaweiAccountManagement()
-              })
+              if (this.canManageCurrentInstance()) {
+                this.SettingsRow('系统设置', '网站与注册策略', '', $r('sys.symbol.gearshape'), () => { this.openSystemSettings() })
+                Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
+                this.SettingsRow('用户管理', '用户状态与角色', '', $r('sys.symbol.person'), () => { this.openUserManagement() })
+                Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
+                this.SettingsRow('全部邮件', '全局邮件管理', '', $r('sys.symbol.envelope'), () => { this.openGlobalMailManagement() })
+                Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
+                this.SettingsRow('角色权限', '角色与权限树', '', $r('sys.symbol.person_fill'), () => { this.openRoleManagement() })
+                Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
+                this.SettingsRow('数据分析', '当前实例数据概览', '', $r('sys.symbol.doc'), () => { this.openAnalytics() })
+                Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
+                this.SettingsRow('注册码管理', '生成与使用记录', '', $r('sys.symbol.star_fill'), () => { this.openRegistrationCodeManagement() })
+              }
+              if (this.canManageCurrentInstance() && this.canManageHuaweiBindings()) {
+                Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
+              }
+              if (this.canManageHuaweiBindings()) {
+                this.SettingsRow('华为账号绑定', '查看华为账号与主邮箱关系', '', $r('sys.symbol.person_2'), () => {
+                  this.openHuaweiAccountManagement()
+                })
+              }
             }
             .width('100%')
             .borderRadius(Constants.RADIUS_CARD)
-            .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK,
-              { adaptiveColor: AdaptiveColor.DEFAULT })
+            .backgroundColor($r('app.color.card'))
             .border({ width: 1, color: $r('app.color.divider') })
           }
 
-          Button('退出登录', { type: ButtonType.Capsule, stateEffect: true })
+          Button('退出登录', {
+            type: ButtonType.Capsule,
+            stateEffect: true,
+            buttonStyle: ButtonStyleMode.EMPHASIZED,
+            controlSize: ControlSize.NORMAL,
+            role: ButtonRole.ERROR
+          })
             .width('100%')
-            .height(48)
-            .fontSize(Constants.FONT_SIZE_SUBTITLE)
-            .fontColor($r('sys.color.icon_on_primary'))
-            .backgroundColor($r('app.color.danger'))
             .margin({ top: Constants.GAP_SMALL })
             .onClick(() => { this.showLogoutConfirm = true })
 
@@ -266,20 +284,17 @@ export struct SettingsPage {
         this.LogoutConfirmDialog()
       }
 
-      if (this.showThemeDialog) {
-        this.ThemeSelectDialog()
-      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-    .blur(this.showAboutSheet || this.showAccountCenterSheet ? 12 : 0)
     .bindSheet($$this.showAboutSheet, this.AboutSheet(), {
       height: '84%',
       dragBar: false,
       showClose: false,
       blurStyle: BlurStyle.COMPONENT_THICK,
       maskColor: 0x1A000000,
+      onDisappear: () => { this.showAboutSheet = false },
       enableOutsideInteractive: false
     })
   }
@@ -336,68 +351,82 @@ export struct SettingsPage {
 
   @Builder
   private ThemeSettingsRow() {
-    Row() {
-      SymbolGlyph($r('sys.symbol.paintbrush'))
-        .fontSize(Constants.SIZE_ICON_MEDIUM)
-        .fontColor([$r('app.color.text_primary')])
-        .width(32)
-        .margin({ right: 12 })
+    Column({ space: Constants.GAP_SMALL }) {
+      Row() {
+        SymbolGlyph($r('sys.symbol.paintbrush'))
+          .fontSize(Constants.SIZE_ICON_MEDIUM)
+          .fontColor([$r('app.color.text_primary')])
+          .width(32)
+          .margin({ right: 12 })
 
-      Column({ space: 3 }) {
-        Text('外观与主题')
-          .fontSize(Constants.FONT_SIZE_SUBTITLE)
-          .fontColor($r('app.color.text_primary'))
-          .maxLines(1)
-        Text('主题与显示模式')
-          .fontSize(Constants.FONT_SIZE_SMALL)
-          .fontColor($r('app.color.text_secondary'))
-          .maxLines(1)
+        Column({ space: 3 }) {
+          Text('外观与主题')
+            .fontSize(Constants.FONT_SIZE_SUBTITLE)
+            .fontColor($r('app.color.text_primary'))
+            .maxLines(1)
+          Text('主题与显示模式')
+            .fontSize(Constants.FONT_SIZE_SMALL)
+            .fontColor($r('app.color.text_secondary'))
+            .maxLines(1)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
       }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
+      .width('100%')
 
-      Text(this.getThemeLabel())
-        .fontSize(Constants.FONT_SIZE_SMALL)
-        .fontColor($r('app.color.text_secondary'))
-        .margin({ right: 6 })
-      SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(Constants.SIZE_ICON_SMALL)
-        .fontColor([$r('app.color.text_tertiary')])
+      CapsuleSegmentButtonV2({
+        items: this.themeItems,
+        selectedIndex: this.getThemeSelectedIndex(),
+        onItemClicked: (index: number): void => {
+          this.selectThemeByIndex(index)
+        },
+        itemFontSize: LengthMetrics.fp(12),
+        itemSelectedFontSize: LengthMetrics.fp(12),
+        itemMinHeight: LengthMetrics.vp(32),
+        itemPadding: {
+          top: LengthMetrics.vp(0),
+          bottom: LengthMetrics.vp(0),
+          start: LengthMetrics.vp(5),
+          end: LengthMetrics.vp(5)
+        },
+        buttonMinHeight: LengthMetrics.vp(36),
+        buttonPadding: LengthMetrics.vp(2)
+      })
+        .width('100%')
     }
     .width('100%')
-    .height(68)
-    .padding({ left: 16, right: 16 })
-    .onClick(() => { this.showThemeDialog = true })
+    .padding({ left: 16, right: 16, top: 12, bottom: 12 })
   }
 
   @Builder
   private SettingsCard(title: string, description: string, value: string, icon: ResourceStr, onItemClick: () => void) {
-    HdsListItemCard({
-      prefixItem: new PrefixIcon({
-        iconSize: IconSize.SYSTEM_ICON,
-        iconValue: { symbol: icon }
-      }),
-      textItem: {
-        primaryText: { text: title },
-        secondaryText: { text: description }
-      },
-      suffixItem: new SuffixTextAndArrow({ text: value }),
-      cardHeight: 72,
-      cardBackgroundColor: $r('app.color.card'),
-      cardBorderRadius: Constants.RADIUS_CARD,
-      onClick: onItemClick
-    })
+    Column() {
+      HdsListItemCard({
+        prefixItem: new PrefixIcon({
+          iconSize: IconSize.SYSTEM_ICON,
+          iconValue: { symbol: icon }
+        }),
+        textItem: {
+          primaryText: { text: title },
+          secondaryText: { text: description }
+        },
+        suffixItem: new SuffixTextAndArrow({ text: value }),
+        cardHeight: 72,
+        cardBackgroundColor: $r('app.color.card'),
+        cardBorderRadius: Constants.RADIUS_CARD,
+        onClick: onItemClick
+      })
+    }
+    .width('100%')
+    .padding({ top: Constants.GAP_SMALL, bottom: Constants.GAP_SMALL })
   }
 
   @Builder
   private AccountCenterSheet() {
     HdsNavDestination() {
       Column() {
-        Scroll() {
+        Scroll(this.fallbackAccountScroller) {
           Column({ space: Constants.GAP_MEDIUM }) {
-            Blank()
-              .height(Constants.TITLE_BAR_HEIGHT_MINI + 2)
-
             Column({ space: 6 }) {
               if (this.huaweiAvatarUrl !== '') {
                 Image(this.huaweiAvatarUrl)
@@ -486,6 +515,7 @@ export struct SettingsPage {
         }
         .width('100%')
         .height('100%')
+        .clip(false)
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
       }
@@ -496,33 +526,41 @@ export struct SettingsPage {
     .titleBar({
       content: {
         title: { mainTitle: '账号中心' },
-        backIcon: {
-          label: '返回',
-          icon: $r('sys.symbol.chevron_backward'),
-          isEnabled: true,
-          action: () => { this.showAccountCenterSheet = false }
-        },
         menu: {
           maxCount: 1,
           value: [{
             content: {
               label: '关闭',
               icon: $r('sys.symbol.xmark'),
+              type: IconStyleMode.SMALL,
               isEnabled: true,
               action: () => { this.showAccountCenterSheet = false }
             }
           }]
         }
       },
+      enableComponentSafeArea: true,
       style: {
-        scrollEffectOpts: { enableScrollEffect: false },
-        blurStrategy: BlurStrategy.DISABLE,
+        scrollEffectOpts: {
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
+        },
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
         },
         originalStyle: {
-          backgroundStyle: { backgroundColor: Color.Transparent, blurRadius: 0 },
+          backgroundStyle: { maskExtraHeight: 0 },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('app.color.text_primary') },
+            menuStyle: { iconColor: $r('app.color.text_primary') },
+            backIconStyle: { iconColor: $r('app.color.text_primary') }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 },
           contentStyle: {
             titleStyle: { mainTitleColor: $r('app.color.text_primary') },
             menuStyle: { iconColor: $r('app.color.text_primary') },
@@ -531,8 +569,9 @@ export struct SettingsPage {
         }
       }
     })
-    .hideBackButton(false)
-    .titleMode(HdsNavDestinationTitleMode.MINI)
+    .hideBackButton(true)
+    .titleMode(HdsNavDestinationTitleMode.MODAL)
+    .bindToScrollable([this.fallbackAccountScroller])
     .onBackPressed(() => {
       this.showAccountCenterSheet = false
       return true
@@ -540,13 +579,13 @@ export struct SettingsPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-    .blur(this.showPersonalSettingsSheet ? 12 : 0)
     .bindSheet($$this.showPersonalSettingsSheet, this.PersonalSettingsSheet(), {
       height: '84%',
       dragBar: false,
       showClose: false,
       blurStyle: BlurStyle.COMPONENT_THICK,
       maskColor: 0x1A000000,
+      onDisappear: () => { this.showPersonalSettingsSheet = false },
       enableOutsideInteractive: false
     })
   }
@@ -615,7 +654,7 @@ export struct SettingsPage {
   private PersonalSettingsSheet() {
     Stack() {
       HdsNavDestination() {
-        Scroll() {
+        Scroll(this.fallbackSettingsScroller) {
           Column({ space: Constants.GAP_MEDIUM }) {
             this.SectionTitle('账号信息')
             Column() {
@@ -676,39 +715,48 @@ export struct SettingsPage {
         }
         .width('100%')
         .height('100%')
+        .clip(false)
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
       }
       .titleBar({
         content: {
           title: { mainTitle: '账号设置' },
-          backIcon: {
-            label: '返回',
-            icon: $r('sys.symbol.chevron_backward'),
-            isEnabled: true,
-            action: () => { this.showPersonalSettingsSheet = false }
-          },
           menu: {
             maxCount: 1,
             value: [{
               content: {
                 label: '关闭',
                 icon: $r('sys.symbol.xmark'),
+                type: IconStyleMode.SMALL,
                 isEnabled: true,
                 action: () => { this.showPersonalSettingsSheet = false }
               }
             }]
           }
         },
+        enableComponentSafeArea: true,
         style: {
-          scrollEffectOpts: { enableScrollEffect: false },
-          blurStrategy: BlurStrategy.DISABLE,
+          scrollEffectOpts: {
+            enableScrollEffect: true,
+            scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+            blurEffectiveStartOffset: LengthMetrics.vp(0),
+            blurEffectiveEndOffset: LengthMetrics.vp(20)
+          },
           systemMaterialEffect: {
             materialType: hdsMaterial.MaterialType.ADAPTIVE,
             materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
           },
           originalStyle: {
-            backgroundStyle: { backgroundColor: Color.Transparent, blurRadius: 0 },
+            backgroundStyle: { maskExtraHeight: 0 },
+            contentStyle: {
+              titleStyle: { mainTitleColor: $r('app.color.text_primary') },
+              menuStyle: { iconColor: $r('app.color.text_primary') },
+              backIconStyle: { iconColor: $r('app.color.text_primary') }
+            }
+          },
+          scrollEffectStyle: {
+            backgroundStyle: { maskExtraHeight: 0 },
             contentStyle: {
               titleStyle: { mainTitleColor: $r('app.color.text_primary') },
               menuStyle: { iconColor: $r('app.color.text_primary') },
@@ -717,8 +765,9 @@ export struct SettingsPage {
           }
         }
       })
-      .hideBackButton(false)
-      .titleMode(HdsNavDestinationTitleMode.MINI)
+      .hideBackButton(true)
+      .titleMode(HdsNavDestinationTitleMode.MODAL)
+      .bindToScrollable([this.fallbackSettingsScroller])
       .onBackPressed(() => {
         this.showPersonalSettingsSheet = false
         return true
@@ -861,117 +910,105 @@ export struct SettingsPage {
   @Builder
   private AboutSheet() {
     HdsNavDestination() {
-      Column() {
-        Column({ space: Constants.GAP_SMALL }) {
-          Image($r('app.media.startIcon'))
-            .width(96)
-            .height(96)
-            .borderRadius(24)
-            .objectFit(ImageFit.Cover)
-            .shadow(Constants.SHADOW_CARD)
+      Scroll(this.aboutScroller) {
+        Column({ space: Constants.GAP_MEDIUM }) {
+          Column({ space: Constants.GAP_SMALL }) {
+            Image($r('app.media.startIcon'))
+              .width(96)
+              .height(96)
+              .borderRadius(24)
+              .objectFit(ImageFit.Cover)
+              .shadow(Constants.SHADOW_CARD)
 
-          Text('云笺集')
-            .fontSize(Constants.FONT_SIZE_TITLE)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
+            Text('云笺集')
+              .fontSize(Constants.FONT_SIZE_TITLE)
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.text_primary'))
 
-          Text('版本 ' + this.getAppVersionName())
-            .fontSize(Constants.FONT_SIZE_COMMON)
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .width('100%')
-        .height(176)
-        .justifyContent(FlexAlign.Center)
-        .margin({ top: 32 })
-
-        Row().height(12)
-
-        Scroll() {
-          Column({ space: Constants.GAP_MEDIUM }) {
-            Column() {
-              this.AboutActionRow('联系我', '2717831140@qq.com', '点击复制', () => {
-                this.copyText('2717831140@qq.com', '联系邮箱')
-              })
-              Divider().color($r('app.color.divider')).margin({ left: 16, right: 16 })
-              this.AboutActionRow('QQ交流群', '1075732184', '点击复制', () => {
-                this.copyText('1075732184', 'QQ群号')
-              })
-              Divider().color($r('app.color.divider')).margin({ left: 16, right: 16 })
-              this.AboutActionRow('官方TG交流群', 't.me/CloudMailforHarmonyOSGroup', '点击加入', () => {
-                this.openTelegramGroup()
-              })
-              Divider().color($r('app.color.divider')).margin({ left: 16, right: 16 })
-              this.AboutActionRow('开源仓库', 'Riordon666/cloud-mail-for-harmonyos', '', () => {
-                this.openRepository()
-              })
-              Divider().color($r('app.color.divider')).margin({ left: 16, right: 16 })
-              Row() {
-                Text('更新日志')
-                  .fontSize(Constants.FONT_SIZE_SUBTITLE)
-                  .fontColor($r('app.color.text_primary'))
-                  .layoutWeight(1)
-                Text('查看全部版本')
-                  .fontSize(Constants.FONT_SIZE_SMALL)
-                  .fontColor($r('app.color.text_secondary'))
-                  .margin({ right: 8 })
-                SymbolGlyph($r('sys.symbol.chevron_right'))
-                  .fontSize(Constants.SIZE_ICON_SMALL)
-                  .fontColor([$r('app.color.text_tertiary')])
-              }
-              .width('100%')
-              .height(64)
-              .padding({ left: 16, right: 16 })
-              .onClick(() => {
-                this.showChangeLogCover = true
-              })
-              .bindSheet($$this.showChangeLogCover, this.ChangeLogSheet(), {
-                height: '84%',
-                dragBar: false,
-                showClose: false,
-                blurStyle: BlurStyle.COMPONENT_THICK,
-                maskColor: 0x1A000000,
-                enableOutsideInteractive: false
-              })
-            }
-            .width('100%')
-            .backgroundColor($r('app.color.card'))
-            .borderRadius(Constants.RADIUS_CARD)
-            .border({ width: 1, color: $r('app.color.divider') })
-
-            Text('云笺集 · HarmonyOS 原生邮件客户端')
-              .fontSize(Constants.FONT_SIZE_SMALL)
-              .fontColor($r('app.color.text_tertiary'))
-              .margin({ top: 4, bottom: 24 })
+            Text('版本 ' + this.getAppVersionName())
+              .fontSize(Constants.FONT_SIZE_COMMON)
+              .fontColor($r('app.color.text_secondary'))
           }
           .width('100%')
-          .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, bottom: 24 })
+          .height(196)
+          .justifyContent(FlexAlign.Center)
+
+        Column() {
+          this.AboutActionRow('联系我', '2717831140@qq.com', '点击复制', () => {
+            this.copyText('2717831140@qq.com', '联系邮箱')
+          })
+          Divider().color($r('app.color.divider')).margin({ left: 16, right: 16 })
+          this.AboutActionRow('QQ交流群', '1075732184', '点击复制', () => {
+            this.copyText('1075732184', 'QQ群号')
+          })
+          Divider().color($r('app.color.divider')).margin({ left: 16, right: 16 })
+          this.AboutActionRow('官方TG交流群', 't.me/CloudMailforHarmonyOSGroup', '点击加入', () => {
+            this.openTelegramGroup()
+          })
+          Divider().color($r('app.color.divider')).margin({ left: 16, right: 16 })
+          this.AboutActionRow('开源仓库', 'Riordon666/cloud-mail-for-harmonyos', '', () => {
+            this.openRepository()
+          })
+          Divider().color($r('app.color.divider')).margin({ left: 16, right: 16 })
+          Row() {
+            Text('更新日志')
+              .fontSize(Constants.FONT_SIZE_SUBTITLE)
+              .fontColor($r('app.color.text_primary'))
+              .layoutWeight(1)
+            Text('查看全部版本')
+              .fontSize(Constants.FONT_SIZE_SMALL)
+              .fontColor($r('app.color.text_secondary'))
+              .margin({ right: 8 })
+            SymbolGlyph($r('sys.symbol.chevron_right'))
+              .fontSize(Constants.SIZE_ICON_SMALL)
+              .fontColor([$r('app.color.text_tertiary')])
+          }
+          .width('100%')
+          .height(64)
+          .padding({ left: 16, right: 16 })
+          .onClick(() => {
+            this.showChangeLogCover = true
+          })
+          .bindSheet($$this.showChangeLogCover, this.ChangeLogSheet(), {
+            height: '84%',
+            dragBar: false,
+            showClose: false,
+            blurStyle: BlurStyle.COMPONENT_THICK,
+            maskColor: 0x1A000000,
+            onDisappear: () => { this.showChangeLogCover = false },
+            enableOutsideInteractive: false
+          })
         }
         .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
+        .backgroundColor($r('app.color.card'))
+        .borderRadius(Constants.RADIUS_CARD)
+        .border({ width: 1, color: $r('app.color.divider') })
+
+        Text('云笺集 · HarmonyOS 原生邮件客户端')
+          .fontSize(Constants.FONT_SIZE_SMALL)
+          .fontColor($r('app.color.text_tertiary'))
+          .margin({ top: 4, bottom: 24 })
+        }
+        .width('100%')
+        .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, bottom: 24 })
       }
       .width('100%')
       .height('100%')
+      .clip(false)
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
       .backgroundColor($r('app.color.background'))
     }
     .titleBar({
       content: {
         title: { mainTitle: '关于' },
-        backIcon: {
-          label: '返回',
-          icon: $r('sys.symbol.chevron_backward'),
-          isEnabled: true,
-          action: () => {
-            this.showAboutSheet = false
-          }
-        },
         menu: {
           maxCount: 1,
           value: [{
             content: {
               label: '关闭',
               icon: $r('sys.symbol.xmark'),
+              type: IconStyleMode.SMALL,
               isEnabled: true,
               action: () => {
                 this.showAboutSheet = false
@@ -980,20 +1017,28 @@ export struct SettingsPage {
           }]
         }
       },
+      enableComponentSafeArea: true,
       style: {
         scrollEffectOpts: {
-          enableScrollEffect: false
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
-        blurStrategy: BlurStrategy.DISABLE,
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
         },
         originalStyle: {
-          backgroundStyle: {
-            backgroundColor: Color.Transparent,
-            blurRadius: 0
-          },
+          backgroundStyle: { maskExtraHeight: 0 },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('app.color.text_primary') },
+            menuStyle: { iconColor: $r('app.color.text_primary') },
+            backIconStyle: { iconColor: $r('app.color.text_primary') }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 },
           contentStyle: {
             titleStyle: { mainTitleColor: $r('app.color.text_primary') },
             menuStyle: { iconColor: $r('app.color.text_primary') },
@@ -1002,8 +1047,9 @@ export struct SettingsPage {
         }
       }
     })
-    .hideBackButton(false)
-    .titleMode(HdsNavDestinationTitleMode.MINI)
+    .hideBackButton(true)
+    .titleMode(HdsNavDestinationTitleMode.MODAL)
+    .bindToScrollable([this.aboutScroller])
     .onBackPressed(() => {
       this.showAboutSheet = false
       return true
@@ -1011,7 +1057,6 @@ export struct SettingsPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-    .blur(this.showChangeLogCover ? 12 : 0)
   }
 
   @Builder
@@ -1049,90 +1094,86 @@ export struct SettingsPage {
   @Builder
   private ChangeLogSheet() {
     HdsNavDestination() {
-      Column() {
-        Column({ space: Constants.GAP_MEDIUM }) {
-          Image($r('app.media.startIcon'))
-            .width(96)
-            .height(96)
-            .borderRadius(24)
-            .objectFit(ImageFit.Cover)
-            .shadow(Constants.SHADOW_CARD)
+      List({ scroller: this.changeLogScroller, space: Constants.GAP_MEDIUM }) {
+        ListItem() {
+          Column({ space: Constants.GAP_MEDIUM }) {
+            Image($r('app.media.startIcon'))
+              .width(96)
+              .height(96)
+              .borderRadius(24)
+              .objectFit(ImageFit.Cover)
+              .shadow(Constants.SHADOW_CARD)
 
-          Text('当前版本：' + this.getAppVersionName() + ' (' + this.getAppVersionCode().toString() + ')')
-            .fontSize(Constants.FONT_SIZE_SUBTITLE)
-            .fontColor($r('app.color.text_primary'))
-        }
-        .width('100%')
-        .height(176)
-        .justifyContent(FlexAlign.Center)
-        .margin({ top: 32 })
-
-        Row().height(12)
-
-        List({ space: Constants.GAP_MEDIUM }) {
-          ForEach(this.changeLogs, (item: ChangeLogItem) => {
-            ListItem() {
-              this.ChangeLogCard(item)
-            }
-            .width('100%')
-          }, (item: ChangeLogItem): string => item.version)
-
-          ListItem() {
-            Row().height(32)
+            Text('当前版本：' + this.getAppVersionName() + ' (' + this.getAppVersionCode().toString() + ')')
+              .fontSize(Constants.FONT_SIZE_SUBTITLE)
+              .fontColor($r('app.color.text_primary'))
           }
+          .width('100%')
+          .height(196)
+          .justifyContent(FlexAlign.Center)
         }
-        .layoutWeight(1)
-        .width('100%')
-        .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
-        .alignListItem(ListItemAlign.Center)
-        .cachedCount(this.changeLogs.length)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
+
+        ForEach(this.changeLogs, (item: ChangeLogItem) => {
+          ListItem() {
+            this.ChangeLogCard(item)
+          }
+          .width('100%')
+        }, (item: ChangeLogItem): string => item.version)
+
+        ListItem() {
+          Row().height(32)
+        }
       }
       .width('100%')
       .height('100%')
+      .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
+      .alignListItem(ListItemAlign.Center)
+      .cachedCount(4, true)
+      .clip(false)
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
       .backgroundColor($r('app.color.background'))
     }
     .titleBar({
       content: {
         title: { mainTitle: '更新日志' },
-        backIcon: {
-          label: '返回',
-          icon: $r('sys.symbol.chevron_backward'),
-          isEnabled: true,
-          action: () => {
-            this.showChangeLogCover = false
-          }
-        },
         menu: {
           maxCount: 1,
           value: [{
             content: {
               label: '关闭',
               icon: $r('sys.symbol.xmark'),
+              type: IconStyleMode.SMALL,
               isEnabled: true,
               action: () => {
                 this.showChangeLogCover = false
-                this.showAboutSheet = false
               }
             }
           }]
         }
       },
+      enableComponentSafeArea: true,
       style: {
         scrollEffectOpts: {
-          enableScrollEffect: false
+          enableScrollEffect: true,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+          blurEffectiveStartOffset: LengthMetrics.vp(0),
+          blurEffectiveEndOffset: LengthMetrics.vp(20)
         },
-        blurStrategy: BlurStrategy.DISABLE,
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.ADAPTIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
         },
         originalStyle: {
-          backgroundStyle: {
-            backgroundColor: Color.Transparent,
-            blurRadius: 0
-          },
+          backgroundStyle: { maskExtraHeight: 0 },
+          contentStyle: {
+            titleStyle: { mainTitleColor: $r('app.color.text_primary') },
+            menuStyle: { iconColor: $r('app.color.text_primary') },
+            backIconStyle: { iconColor: $r('app.color.text_primary') }
+          }
+        },
+        scrollEffectStyle: {
+          backgroundStyle: { maskExtraHeight: 0 },
           contentStyle: {
             titleStyle: { mainTitleColor: $r('app.color.text_primary') },
             menuStyle: { iconColor: $r('app.color.text_primary') },
@@ -1141,8 +1182,9 @@ export struct SettingsPage {
         }
       }
     })
-    .hideBackButton(false)
-    .titleMode(HdsNavDestinationTitleMode.MINI)
+    .hideBackButton(true)
+    .titleMode(HdsNavDestinationTitleMode.MODAL)
+    .bindToScrollable([this.changeLogScroller])
     .onBackPressed(() => {
       this.showChangeLogCover = false
       return true
@@ -1218,63 +1260,6 @@ export struct SettingsPage {
   }
 
   @Builder
-  private ThemeSelectDialog() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor($r('app.color.overlay'))
-        .onClick(() => { this.showThemeDialog = false })
-
-      Column({ space: 0 }) {
-        Text('外观设置')
-          .fontSize(Constants.FONT_SIZE_TITLE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .width('100%')
-          .padding({ left: 20, right: 20, top: 20, bottom: 16 })
-
-        this.ThemeOption('跟随系统', ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET)
-        this.ThemeOption('浅色模式', ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT)
-        this.ThemeOption('深色模式', ConfigurationConstant.ColorMode.COLOR_MODE_DARK)
-
-        Button('取消', { type: ButtonType.Normal, stateEffect: true })
-          .width('100%')
-          .height(44)
-          .fontColor($r('app.color.text_secondary'))
-          .backgroundColor($r('app.color.card'))
-          .margin({ top: 12, left: 20, right: 20, bottom: 20 })
-          .onClick(() => { this.showThemeDialog = false })
-      }
-      .width('100%')
-      .margin({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
-      .backgroundColor($r('app.color.card'))
-      .borderRadius(Constants.RADIUS_CARD)
-      .shadow(Constants.SHADOW_CARD)
-    }
-    .width('100%')
-    .height('100%')
-  }
-
-  @Builder
-  ThemeOption(label: string, mode: number) {
-    Row() {
-      Text(label)
-        .fontSize(Constants.FONT_SIZE_SUBTITLE)
-        .fontColor($r('app.color.text_primary'))
-        .layoutWeight(1)
-      if (this.currentColorMode === mode) {
-        SymbolGlyph($r('sys.symbol.checkmark'))
-          .fontSize(Constants.SIZE_ICON_SMALL)
-          .fontColor([$r('app.color.primary')])
-      }
-    }
-    .width('100%')
-    .padding({ left: 20, right: 20, top: 16, bottom: 16 })
-    .onClick(() => { this.selectTheme(mode) })
-  }
-
-  @Builder
   private LogoutConfirmDialog() {
     Stack({ alignContent: Alignment.Center }) {
       Column()
@@ -1320,14 +1305,26 @@ export struct SettingsPage {
     .height('100%')
   }
 
-  private getThemeLabel(): string {
+  private getThemeSelectedIndex(): number {
     if (this.currentColorMode === ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT) {
-      return '浅色模式'
+      return 1
     }
     if (this.currentColorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK) {
-      return '深色模式'
+      return 2
     }
-    return '跟随系统'
+    return 0
+  }
+
+  private selectThemeByIndex(index: number): void {
+    if (index === 1) {
+      this.selectTheme(ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT)
+      return
+    }
+    if (index === 2) {
+      this.selectTheme(ConfigurationConstant.ColorMode.COLOR_MODE_DARK)
+      return
+    }
+    this.selectTheme(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET)
   }
 
   private getRoleLabel(): string {
@@ -1349,7 +1346,7 @@ export struct SettingsPage {
       return info.versionName
     } catch (err) {
       console.error('get app version failed')
-      return '1.1.1'
+      return '1.2.0'
     }
   }
 
@@ -1360,12 +1357,11 @@ export struct SettingsPage {
       return info.versionCode
     } catch (err) {
       console.error('get app version code failed')
-      return 1010001
+      return 1020000
     }
   }
 
   private selectTheme(mode: number): void {
-    this.showThemeDialog = false
     this.currentColorMode = mode
     setAppColorMode(mode)
   }
@@ -1376,56 +1372,97 @@ export struct SettingsPage {
     }
   }
 
+  private canManageCurrentInstance(): boolean {
+    return this.authRole === 'admin'
+  }
+
+  private canManageHuaweiBindings(): boolean {
+    return this.platformRole === 'SUPER_ADMIN'
+  }
+
+  private shouldShowAdminSection(): boolean {
+    return this.canManageCurrentInstance() || this.canManageHuaweiBindings()
+  }
+
   private openSystemSettings(): void {
+    if (!this.canManageCurrentInstance()) {
+      this.showToast('当前邮箱服务无管理员权限')
+      return
+    }
     if (this.onSystemSettings) {
       this.onSystemSettings()
     }
   }
 
   private openUserManagement(): void {
+    if (!this.canManageCurrentInstance()) {
+      this.showToast('当前邮箱服务无管理员权限')
+      return
+    }
     if (this.onManageUsers) {
       this.onManageUsers()
     }
   }
 
   private openGlobalMailManagement(): void {
+    if (!this.canManageCurrentInstance()) {
+      this.showToast('当前邮箱服务无管理员权限')
+      return
+    }
     if (this.onManageGlobalMails) {
       this.onManageGlobalMails()
     }
   }
 
   private openRoleManagement(): void {
+    if (!this.canManageCurrentInstance()) {
+      this.showToast('当前邮箱服务无管理员权限')
+      return
+    }
     if (this.onManageRoles) {
       this.onManageRoles()
     }
   }
 
   private openAnalytics(): void {
+    if (!this.canManageCurrentInstance()) {
+      this.showToast('当前邮箱服务无管理员权限')
+      return
+    }
     if (this.onOpenAnalytics) {
       this.onOpenAnalytics()
     }
   }
 
   private openRegistrationCodeManagement(): void {
+    if (!this.canManageCurrentInstance()) {
+      this.showToast('当前邮箱服务无管理员权限')
+      return
+    }
     if (this.onManageRegistrationCodes) {
       this.onManageRegistrationCodes()
     }
   }
 
   private openHuaweiAccountManagement(): void {
+    if (!this.canManageHuaweiBindings()) {
+      this.showToast('仅平台超级管理员可查看华为账号绑定')
+      return
+    }
     if (this.onManageHuaweiAccounts) {
       this.onManageHuaweiAccounts()
     }
   }
 
-  private async loadHuaweiIdentity(): Promise<void> {
+  private async loadHuaweiIdentity(forceRefresh: boolean = false): Promise<void> {
     const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext
     const cachedBinding: HuaweiAccountBinding | null = HuaweiAccountCache.load(context, this.authEmail)
     if (cachedBinding !== null) {
-      this.applyHuaweiIdentity(cachedBinding)
+      this.applyHuaweiIdentity(cachedBinding, false)
+      MailStatsStore.syncMissing(cachedBinding.receiveCount, cachedBinding.sentCount, cachedBinding.starCount)
       this.huaweiIdentityLoaded = true
     }
-    if (!HuaweiAccountCache.shouldRefresh(this.authEmail)) {
+    if (!forceRefresh && !HuaweiAccountCache.shouldRefresh(this.authEmail)) {
       this.huaweiIdentityLoaded = true
       return
     }
@@ -1444,15 +1481,15 @@ export struct SettingsPage {
     }
   }
 
-  private applyHuaweiIdentity(binding: HuaweiAccountBinding): void {
+  private applyHuaweiIdentity(binding: HuaweiAccountBinding, syncStats: boolean = true): void {
     this.huaweiNickName = binding.nickName
     this.huaweiAvatarUrl = binding.avatarUrl
     this.huaweiPrimaryEmail = binding.primaryEmail
     this.huaweiUserId = binding.huaweiUserId
     this.userCreateTime = binding.userCreateTime
-    this.receiveMailCount = binding.receiveCount
-    this.sentMailCount = binding.sentCount
-    this.starMailCount = binding.starCount
+    if (syncStats) {
+      MailStatsStore.sync(binding.receiveCount, binding.sentCount, binding.starCount)
+    }
   }
 
   private getHuaweiDisplayName(): string {
@@ -1462,7 +1499,7 @@ export struct SettingsPage {
     if (this.huaweiNickName !== '') {
       return this.huaweiNickName
     }
-    return this.huaweiUserId === '' ? '华为账号资料待更新' : '华为账号 · ' + this.huaweiUserId
+    return '华为账号资料待更新'
   }
 
   private getHuaweiBindingText(): string {
@@ -1584,7 +1621,7 @@ export struct SettingsPage {
     }
   }
 
-  private showToast(message: string): void {
+  private showToast(message: ResourceStr): void {
     try {
       this.toast.openToast({ message: message, duration: 1500 })
     } catch (err) {

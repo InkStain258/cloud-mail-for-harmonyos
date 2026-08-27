@@ -1,9 +1,11 @@
-import { PromptAction } from '@kit.ArkUI'
+﻿import { PromptAction } from '@kit.ArkUI'
 import { common } from '@kit.AbilityKit'
+import { LengthMetrics } from '@kit.ArkUI'
 import {
-  BlurStrategy,
   HdsNavDestination,
   HdsNavDestinationTitleMode,
+  IconStyleMode,
+  ScrollEffectType,
   hdsMaterial
 } from '@kit.UIDesignKit'
 import { HuaweiAccountApi, HuaweiAccountBinding } from '../api/HuaweiAccountApi'
@@ -11,20 +13,32 @@ import { ProfileApi } from '../api/ProfileApi'
 import Constants from '../common/Constants'
 import { DateTimeUtils } from '../common/DateTimeUtils'
 import { HuaweiAccountCache } from '../common/HuaweiAccountCache'
+import { PlatformBinding } from '../common/InstanceModels'
+import { InstanceService } from '../common/InstanceService'
+import { MailStatsStore } from '../common/MailStatsStore'
+import { PlatformSessionService } from '../common/PlatformSessionService'
 
 @Component
 export struct AccountCenterSheetHost {
+  private accountCenterScroller: Scroller = new Scroller()
+  private accountSettingsScroller: Scroller = new Scroller()
   @Link @Watch('onSheetVisibilityChanged') isShown: boolean
-  @StorageLink('authEmail') authEmail: string = ''
+  @StorageLink('sessionRevision') @Watch('onSessionRevisionChanged') sessionRevision: number = 0
+  @StorageLink('instanceRevision') @Watch('onInstanceRevisionChanged') instanceRevision: number = 0
+  @StorageLink('platformRevision') @Watch('onPlatformRevisionChanged') platformRevision: number = 0
   @State huaweiNickName: string = ''
   @State huaweiAvatarUrl: string = ''
   @State huaweiPrimaryEmail: string = ''
   @State huaweiUserId: string = ''
   @State userCreateTime: string = ''
-  @State receiveMailCount: number = 0
-  @State sentMailCount: number = 0
-  @State starMailCount: number = 0
+  @StorageLink('mailReceiveCount') receiveMailCount: number = 0
+  @StorageLink('mailSentCount') sentMailCount: number = 0
+  @StorageLink('mailStarCount') starMailCount: number = 0
   @State identityLoaded: boolean = false
+  @State bindingsLoaded: boolean = false
+  @State bindingsLoading: boolean = false
+  @State bindingsLoadError: boolean = false
+  @State boundMailboxes: PlatformBinding[] = []
   @State showAccountSettings: boolean = false
   @State showPasswordDialog: boolean = false
   @State showDeleteAccountDialog: boolean = false
@@ -33,18 +47,39 @@ export struct AccountCenterSheetHost {
   @State newPassword: string = ''
   @State confirmPassword: string = ''
   private toast: PromptAction = this.getUIContext().getPromptAction()
+  private identityRequestInFlight: boolean = false
+  private bindingsRequestInFlight: boolean = false
+  private identityRequestSequence: number = 0
+  private bindingsRequestSequence: number = 0
   onManageAccounts?: () => void
+  onManageInstances?: () => void
   onLogout?: () => void
   onIdentityChanged?: (avatarUrl: string, avatarText: string) => void
 
   aboutToAppear(): void {
+    this.applyPlatformIdentity()
     this.loadHuaweiIdentity()
+    this.loadBoundMailboxes()
   }
 
   private onSheetVisibilityChanged(): void {
     if (this.isShown) {
-      this.loadHuaweiIdentity()
+      this.loadHuaweiIdentity(true)
+      this.loadBoundMailboxes(true)
     }
+  }
+
+  private onSessionRevisionChanged(): void {
+    this.loadHuaweiIdentity(true)
+  }
+
+  private onInstanceRevisionChanged(): void {
+    this.loadBoundMailboxes(true)
+  }
+
+  private onPlatformRevisionChanged(): void {
+    this.applyPlatformIdentity()
+    this.notifyIdentityChanged()
   }
 
   build() {
@@ -65,11 +100,8 @@ export struct AccountCenterSheetHost {
   private AccountCenterSheet() {
     Stack() {
       HdsNavDestination() {
-        Scroll() {
+        Scroll(this.accountCenterScroller) {
           Column({ space: Constants.GAP_MEDIUM }) {
-            Blank()
-              .height(Constants.TITLE_BAR_HEIGHT_MINI + 2)
-
             Column({ space: 6 }) {
               if (this.huaweiAvatarUrl !== '') {
                 Image(this.huaweiAvatarUrl)
@@ -125,7 +157,16 @@ export struct AccountCenterSheetHost {
             .rowsGap(Constants.GAP_MEDIUM)
             .width('100%')
 
+            this.BoundMailboxesCard()
+
             Column() {
+              this.ActionRow('邮箱服务', '多实例绑定与切换', $r('sys.symbol.externaldrive'), () => {
+                this.isShown = false
+                if (this.onManageInstances) {
+                  this.onManageInstances()
+                }
+              })
+              Divider().color($r('app.color.divider')).margin({ left: 56, right: 16 })
               this.ActionRow('账号管理', '主邮箱与副邮箱', $r('sys.symbol.person_2'), () => {
                 this.isShown = false
                 if (this.onManageAccounts) {
@@ -159,6 +200,7 @@ export struct AccountCenterSheetHost {
         }
         .width('100%')
         .height('100%')
+        .clip(false)
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
       }
@@ -168,6 +210,7 @@ export struct AccountCenterSheetHost {
           backIcon: {
             label: '返回',
             icon: $r('sys.symbol.chevron_backward'),
+            type: IconStyleMode.SMALL,
             isEnabled: true,
             action: () => { this.isShown = false }
           },
@@ -177,31 +220,36 @@ export struct AccountCenterSheetHost {
               content: {
                 label: '关闭',
                 icon: $r('sys.symbol.xmark'),
+                type: IconStyleMode.SMALL,
                 isEnabled: true,
                 action: () => { this.isShown = false }
               }
             }]
           }
         },
+        enableComponentSafeArea: true,
         style: {
-          scrollEffectOpts: { enableScrollEffect: false },
-          blurStrategy: BlurStrategy.DISABLE,
+          scrollEffectOpts: {
+            enableScrollEffect: true,
+            scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+            blurEffectiveStartOffset: LengthMetrics.vp(0),
+            blurEffectiveEndOffset: LengthMetrics.vp(20)
+          },
           systemMaterialEffect: {
             materialType: hdsMaterial.MaterialType.ADAPTIVE,
             materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
           },
           originalStyle: {
-            backgroundStyle: { backgroundColor: Color.Transparent, blurRadius: 0 },
-            contentStyle: {
-              titleStyle: { mainTitleColor: $r('app.color.text_primary') },
-              menuStyle: { iconColor: $r('app.color.text_primary') },
-              backIconStyle: { iconColor: $r('app.color.text_primary') }
-            }
+            backgroundStyle: { maskExtraHeight: 0 }
+          },
+          scrollEffectStyle: {
+            backgroundStyle: { maskExtraHeight: 0 }
           }
         }
       })
       .hideBackButton(false)
-      .titleMode(HdsNavDestinationTitleMode.MINI)
+      .titleMode(HdsNavDestinationTitleMode.MODAL)
+      .bindToScrollable([this.accountCenterScroller])
       .onBackPressed(() => {
         this.isShown = false
         return true
@@ -209,7 +257,6 @@ export struct AccountCenterSheetHost {
       .width('100%')
       .height('100%')
       .backgroundColor($r('app.color.background'))
-      .blur(this.showAccountSettings || this.showLogoutConfirm ? 12 : 0)
       .bindSheet($$this.showAccountSettings, this.AccountSettingsSheet(), {
         height: '84%',
         dragBar: false,
@@ -260,6 +307,130 @@ export struct AccountCenterSheetHost {
   }
 
   @Builder
+  private BoundMailboxesCard() {
+    Column() {
+      Row() {
+        Text('已绑定主邮箱')
+          .fontSize(Constants.FONT_SIZE_SUBTITLE)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary'))
+        Blank()
+        Text(this.boundMailboxes.length.toString() + ' 个')
+          .fontSize(Constants.FONT_SIZE_CAPTION)
+          .fontColor($r('app.color.primary'))
+          .padding({ left: 9, right: 9, top: 3, bottom: 3 })
+          .backgroundColor($r('app.color.background'))
+          .borderRadius(Constants.RADIUS_FULL)
+      }
+      .width('100%')
+      .height(52)
+      .padding({ left: 16, right: 16 })
+
+      if (this.bindingsLoading && this.boundMailboxes.length === 0) {
+        Row({ space: Constants.GAP_SMALL }) {
+          LoadingProgress()
+            .width(20)
+            .height(20)
+            .color($r('app.color.primary'))
+          Text('正在读取绑定邮箱')
+            .fontSize(Constants.FONT_SIZE_SMALL)
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .width('100%')
+        .height(56)
+        .padding({ left: 16, right: 16 })
+      } else if (this.bindingsLoadError && this.boundMailboxes.length === 0) {
+        Row({ space: Constants.GAP_SMALL }) {
+          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+            .fontSize(Constants.SIZE_ICON_SMALL)
+            .fontColor([$r('app.color.primary')])
+          Text('加载失败，点击重试')
+            .fontSize(Constants.FONT_SIZE_SMALL)
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .width('100%')
+        .height(56)
+        .padding({ left: 16, right: 16 })
+        .onClick(() => { this.loadBoundMailboxes(true) })
+      } else if (this.bindingsLoaded && this.boundMailboxes.length === 0) {
+        Text('暂未绑定其他邮箱服务')
+          .fontSize(Constants.FONT_SIZE_SMALL)
+          .fontColor($r('app.color.text_secondary'))
+          .width('100%')
+          .height(56)
+          .padding({ left: 16, right: 16 })
+          .textAlign(TextAlign.Start)
+      } else {
+        ForEach(this.boundMailboxes, (item: PlatformBinding, index: number) => {
+          if (index > 0) {
+            Divider().color($r('app.color.divider')).margin({ left: 64, right: 16 })
+          }
+          this.BoundMailboxRow(item)
+        }, (item: PlatformBinding): string => item.bindingId.toString() + '-' + item.instanceId)
+        if (this.bindingsLoadError) {
+          Row({ space: Constants.GAP_SMALL }) {
+            SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+              .fontSize(Constants.SIZE_ICON_SMALL)
+              .fontColor([$r('app.color.primary')])
+            Text('刷新失败，点击重试')
+              .fontSize(Constants.FONT_SIZE_CAPTION)
+              .fontColor($r('app.color.text_secondary'))
+          }
+          .width('100%')
+          .height(44)
+          .padding({ left: 16, right: 16 })
+          .onClick(() => { this.loadBoundMailboxes(true) })
+        }
+      }
+    }
+    .width('100%')
+    .backgroundColor($r('app.color.card'))
+    .borderRadius(Constants.RADIUS_CARD)
+    .border({ width: 1, color: $r('app.color.divider') })
+  }
+
+  @Builder
+  private BoundMailboxRow(item: PlatformBinding) {
+    Row({ space: Constants.GAP_MEDIUM }) {
+      Stack() {
+        Circle()
+          .width(36)
+          .height(36)
+          .foregroundColor($r('app.color.background'))
+        SymbolGlyph($r('sys.symbol.envelope'))
+          .fontSize(Constants.SIZE_ICON_SMALL)
+          .fontColor([$r('app.color.primary')])
+      }
+      .width(36)
+      .height(36)
+
+      Column({ space: 3 }) {
+        Text(item.localEmail)
+          .fontSize(Constants.FONT_SIZE_COMMON)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.text_primary'))
+          .maxLines(2)
+          .wordBreak(WordBreak.BREAK_ALL)
+        Text(item.displayName + ' · ' + item.originHost)
+          .fontSize(Constants.FONT_SIZE_SMALL)
+          .fontColor($r('app.color.text_secondary'))
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      Text(this.getInstanceRoleLabel(item.instanceRole))
+        .fontSize(Constants.FONT_SIZE_CAPTION)
+        .fontColor($r('app.color.primary'))
+        .maxLines(1)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: 68 })
+    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+  }
+
+  @Builder
   private ActionRow(title: string, description: string, icon: Resource, action: () => void) {
     Row() {
       SymbolGlyph(icon)
@@ -291,7 +462,7 @@ export struct AccountCenterSheetHost {
   private AccountSettingsSheet() {
     Stack() {
       HdsNavDestination() {
-        Scroll() {
+        Scroll(this.accountSettingsScroller) {
           Column({ space: Constants.GAP_MEDIUM }) {
             this.SectionTitle('账号信息')
             Column() {
@@ -306,7 +477,7 @@ export struct AccountCenterSheetHost {
 
             this.SectionTitle('安全设置')
             Column() {
-              this.ActionRow('修改密码', '设置新的邮箱账户密码', $r('sys.symbol.lock'), () => {
+              this.ActionRow('修改密码', '修改云笺集主服务邮箱密码', $r('sys.symbol.lock'), () => {
                 this.newPassword = ''
                 this.confirmPassword = ''
                 this.showPasswordDialog = true
@@ -324,7 +495,7 @@ export struct AccountCenterSheetHost {
                   .fontSize(Constants.FONT_SIZE_SUBTITLE)
                   .fontWeight(FontWeight.Bold)
                   .fontColor($r('app.color.danger'))
-                Text('此操作将永久停用邮箱账户并解除华为账号绑定，无法恢复。')
+                Text('此操作将永久删除云笺集主服务账户并解除华为账号绑定，无法恢复。')
                   .fontSize(Constants.FONT_SIZE_SMALL)
                   .fontColor($r('app.color.text_secondary'))
               }
@@ -351,6 +522,7 @@ export struct AccountCenterSheetHost {
         }
         .width('100%')
         .height('100%')
+        .clip(false)
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring)
       }
@@ -360,6 +532,7 @@ export struct AccountCenterSheetHost {
           backIcon: {
             label: '返回',
             icon: $r('sys.symbol.chevron_backward'),
+            type: IconStyleMode.SMALL,
             isEnabled: true,
             action: () => { this.showAccountSettings = false }
           },
@@ -369,31 +542,36 @@ export struct AccountCenterSheetHost {
               content: {
                 label: '关闭',
                 icon: $r('sys.symbol.xmark'),
+                type: IconStyleMode.SMALL,
                 isEnabled: true,
                 action: () => { this.showAccountSettings = false }
               }
             }]
           }
         },
+        enableComponentSafeArea: true,
         style: {
-          scrollEffectOpts: { enableScrollEffect: false },
-          blurStrategy: BlurStrategy.DISABLE,
+          scrollEffectOpts: {
+            enableScrollEffect: true,
+            scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+            blurEffectiveStartOffset: LengthMetrics.vp(0),
+            blurEffectiveEndOffset: LengthMetrics.vp(20)
+          },
           systemMaterialEffect: {
             materialType: hdsMaterial.MaterialType.ADAPTIVE,
             materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
           },
           originalStyle: {
-            backgroundStyle: { backgroundColor: Color.Transparent, blurRadius: 0 },
-            contentStyle: {
-              titleStyle: { mainTitleColor: $r('app.color.text_primary') },
-              menuStyle: { iconColor: $r('app.color.text_primary') },
-              backIconStyle: { iconColor: $r('app.color.text_primary') }
-            }
+            backgroundStyle: { maskExtraHeight: 0 }
+          },
+          scrollEffectStyle: {
+            backgroundStyle: { maskExtraHeight: 0 }
           }
         }
       })
       .hideBackButton(false)
-      .titleMode(HdsNavDestinationTitleMode.MINI)
+      .titleMode(HdsNavDestinationTitleMode.MODAL)
+      .bindToScrollable([this.accountSettingsScroller])
       .onBackPressed(() => {
         this.showAccountSettings = false
         return true
@@ -509,7 +687,7 @@ export struct AccountCenterSheetHost {
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_primary'))
           .width('100%')
-        Text('账户、邮箱数据及华为账号绑定将无法恢复。确定继续吗？')
+        Text('云笺集主服务账户、邮箱数据及华为账号绑定将无法恢复。确定继续吗？')
           .fontSize(Constants.FONT_SIZE_COMMON)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')
@@ -592,44 +770,112 @@ export struct AccountCenterSheetHost {
     .height('100%')
   }
 
-  private async loadHuaweiIdentity(): Promise<void> {
+  private async loadHuaweiIdentity(forceRefresh: boolean = false): Promise<void> {
     const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext
-    const cachedBinding: HuaweiAccountBinding | null = HuaweiAccountCache.load(context, this.authEmail)
+    const ownerEmail: string = InstanceService.getAnchorEmail()
+    this.applyPlatformIdentity()
+    const cachedBinding: HuaweiAccountBinding | null = HuaweiAccountCache.load(context, ownerEmail)
     if (cachedBinding !== null) {
-      this.applyHuaweiIdentity(cachedBinding)
+      this.applyHuaweiIdentity(cachedBinding, false)
+      MailStatsStore.syncMissing(cachedBinding.receiveCount, cachedBinding.sentCount, cachedBinding.starCount)
       this.identityLoaded = true
     }
-    if (!HuaweiAccountCache.shouldRefresh(this.authEmail)) {
+    if (!forceRefresh && !HuaweiAccountCache.shouldRefresh(ownerEmail)) {
       this.identityLoaded = true
       this.notifyIdentityChanged()
       return
     }
+    if (this.identityRequestInFlight && !forceRefresh) {
+      return
+    }
+    const requestId: number = ++this.identityRequestSequence
+    this.identityRequestInFlight = true
     try {
       const binding: HuaweiAccountBinding | null = await HuaweiAccountApi.current()
+      if (requestId !== this.identityRequestSequence || ownerEmail !== InstanceService.getAnchorEmail()) {
+        return
+      }
       this.identityLoaded = true
       if (binding === null) {
         this.notifyIdentityChanged()
         return
       }
       this.applyHuaweiIdentity(binding)
-      HuaweiAccountCache.save(context, this.authEmail, binding)
-      HuaweiAccountCache.markRefreshed(this.authEmail)
+      HuaweiAccountCache.save(context, ownerEmail, binding)
+      HuaweiAccountCache.markRefreshed(ownerEmail)
     } catch (err) {
-      this.identityLoaded = true
-      console.error('load account center identity failed')
+      if (requestId === this.identityRequestSequence) {
+        this.identityLoaded = true
+        console.error('load account center identity failed')
+      }
+    } finally {
+      if (requestId === this.identityRequestSequence) {
+        this.identityRequestInFlight = false
+      }
     }
-    this.notifyIdentityChanged()
+    if (requestId === this.identityRequestSequence) {
+      this.notifyIdentityChanged()
+    }
   }
 
-  private applyHuaweiIdentity(binding: HuaweiAccountBinding): void {
-    this.huaweiNickName = binding.nickName
-    this.huaweiAvatarUrl = binding.avatarUrl
+  private async loadBoundMailboxes(forceRefresh: boolean = false): Promise<void> {
+    if (!forceRefresh && this.bindingsLoaded) {
+      return
+    }
+    if (this.bindingsRequestInFlight && !forceRefresh) {
+      return
+    }
+    const requestId: number = ++this.bindingsRequestSequence
+    this.bindingsRequestInFlight = true
+    this.bindingsLoading = true
+    this.bindingsLoadError = false
+    try {
+      const bindings: PlatformBinding[] = await InstanceService.loadMyBindings()
+      if (requestId !== this.bindingsRequestSequence) {
+        return
+      }
+      this.boundMailboxes = bindings
+      this.bindingsLoaded = true
+    } catch (err) {
+      if (requestId === this.bindingsRequestSequence) {
+        this.bindingsLoadError = true
+        console.error('load platform mailbox bindings failed')
+      }
+    } finally {
+      if (requestId === this.bindingsRequestSequence) {
+        this.bindingsRequestInFlight = false
+        this.bindingsLoading = false
+      }
+    }
+  }
+
+  private applyPlatformIdentity(): void {
+    const nickName: string = PlatformSessionService.getNickName()
+    const avatarUrl: string = PlatformSessionService.getAvatarUrl()
+    const huaweiUserId: string = PlatformSessionService.getHuaweiUserId()
+    if (nickName !== '') {
+      this.huaweiNickName = nickName
+    }
+    if (avatarUrl !== '') {
+      this.huaweiAvatarUrl = avatarUrl
+    }
+    if (huaweiUserId !== '') {
+      this.huaweiUserId = huaweiUserId
+    }
+  }
+
+  private applyHuaweiIdentity(binding: HuaweiAccountBinding, syncStats: boolean = true): void {
+    this.huaweiNickName = PlatformSessionService.getNickName() === '' ?
+      binding.nickName : PlatformSessionService.getNickName()
+    this.huaweiAvatarUrl = PlatformSessionService.getAvatarUrl() === '' ?
+      binding.avatarUrl : PlatformSessionService.getAvatarUrl()
     this.huaweiPrimaryEmail = binding.primaryEmail
-    this.huaweiUserId = binding.huaweiUserId
+    this.huaweiUserId = PlatformSessionService.getHuaweiUserId() === '' ?
+      binding.huaweiUserId : PlatformSessionService.getHuaweiUserId()
     this.userCreateTime = binding.userCreateTime
-    this.receiveMailCount = binding.receiveCount
-    this.sentMailCount = binding.sentCount
-    this.starMailCount = binding.starCount
+    if (syncStats) {
+      MailStatsStore.sync(binding.receiveCount, binding.sentCount, binding.starCount)
+    }
     this.notifyIdentityChanged()
   }
 
@@ -646,16 +892,16 @@ export struct AccountCenterSheetHost {
     if (this.huaweiNickName !== '') {
       return this.huaweiNickName
     }
-    return this.huaweiUserId === '' ? '华为账号资料待更新' : '华为账号 · ' + this.huaweiUserId
+    return '华为账号用户'
   }
 
   private getHuaweiAvatarText(): string {
-    const value: string = this.huaweiNickName === '' ? this.authEmail : this.huaweiNickName
+    const value: string = this.huaweiNickName === '' ? InstanceService.getAnchorEmail() : this.huaweiNickName
     return value === '' ? '华' : value.substring(0, 1).toUpperCase()
   }
 
   private getPrimaryEmailValue(): string {
-    return this.huaweiPrimaryEmail === '' ? this.authEmail : this.huaweiPrimaryEmail
+    return this.huaweiPrimaryEmail === '' ? InstanceService.getAnchorEmail() : this.huaweiPrimaryEmail
   }
 
   private getPrimaryEmailLabel(): string {
@@ -665,6 +911,16 @@ export struct AccountCenterSheetHost {
 
   private getRegistrationTime(): string {
     return DateTimeUtils.formatUtcDateTime(this.userCreateTime, '暂无')
+  }
+
+  private getInstanceRoleLabel(role: string): string {
+    if (role === 'INSTANCE_OWNER') {
+      return '所有者'
+    }
+    if (role === 'INSTANCE_ADMIN') {
+      return '管理员'
+    }
+    return '成员'
   }
 
   private async changePassword(): Promise<void> {
@@ -698,7 +954,7 @@ export struct AccountCenterSheetHost {
       this.showAccountSettings = false
       this.isShown = false
       const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext
-      HuaweiAccountCache.clear(context, this.authEmail)
+      HuaweiAccountCache.clear(context, InstanceService.getAnchorEmail())
       this.showToast('账户已删除')
       if (this.onLogout) {
         this.onLogout()

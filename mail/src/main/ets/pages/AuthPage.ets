@@ -2,7 +2,7 @@
 import { common } from '@kit.AbilityKit'
 import { authentication } from '@kit.AccountKit'
 import { util } from '@kit.ArkTS'
-import { BusinessError } from '@kit.BasicServicesKit'
+import { BusinessError, commonEventManager } from '@kit.BasicServicesKit'
 import { PromptAction } from '@kit.ArkUI'
 import { hilog } from '@kit.PerformanceAnalysisKit'
 import { SettingsApi, WebsiteConfig } from '../api/SettingsApi'
@@ -40,6 +40,8 @@ export struct AuthPage {
   @State isSubmitting: boolean = false
   @StorageLink('registrationEnabled') registrationEnabled: boolean = true
   private toast: PromptAction = this.getUIContext().getPromptAction()
+  private huaweiAccountSubscriber: commonEventManager.CommonEventSubscriber | null = null
+  private isAccountEventSubscriptionActive: boolean = false
   onAuthenticated?: () => void
 
   private huaweiLoginController: loginComponentManager.LoginWithHuaweiIDButtonController =
@@ -57,7 +59,14 @@ export struct AuthPage {
       })
 
   aboutToAppear(): void {
+    this.isAccountEventSubscriptionActive = true
+    this.subscribeHuaweiAccountEvents()
     this.refreshWebsiteConfig()
+  }
+
+  aboutToDisappear(): void {
+    this.isAccountEventSubscriptionActive = false
+    this.unsubscribeHuaweiAccountEvents()
   }
 
   build() {
@@ -195,6 +204,19 @@ export struct AuthPage {
         .width('100%')
         .height(48)
 
+      Button('切换华为账号', { type: ButtonType.Capsule, stateEffect: true })
+        .width('100%')
+        .height(48)
+        .fontSize(Constants.FONT_SIZE_COMMON)
+        .fontColor($r('app.color.text_link'))
+        .backgroundColor($r('app.color.card'))
+        .border({ width: 1, color: $r('app.color.divider') })
+        .margin({ top: 12 })
+        .enabled(!this.isSubmitting)
+        .onClick(() => {
+          this.showHuaweiAccountSwitchGuide()
+        })
+
       Row() {
         Checkbox({ name: 'loginAgreement', group: 'loginAgreementGroup' })
           .select(this.agreementAccepted)
@@ -251,13 +273,13 @@ export struct AuthPage {
         .enabled(this.registrationEnabled)
         .onClick(() => { this.stage = LoginStage.REGISTER_NEW })
 
-      Button('重新使用华为账号登录', { type: ButtonType.Normal, stateEffect: true })
+      Button('切换华为账号', { type: ButtonType.Normal, stateEffect: true })
         .fontSize(Constants.FONT_SIZE_COMMON)
         .fontColor($r('app.color.text_link'))
         .backgroundColor(Color.Transparent)
         .onClick(() => {
-          this.bindToken = ''
-          this.stage = LoginStage.HUAWEI_LOGIN
+          this.resetHuaweiLoginForAccountSwitch()
+          this.showHuaweiAccountSwitchGuide()
         })
 
       if (!this.registrationEnabled) {
@@ -443,6 +465,79 @@ export struct AuthPage {
         return
       }
       this.loginWithHuawei(fallbackAuthorizationCode)
+    })
+  }
+
+  private showHuaweiAccountSwitchGuide(): void {
+    this.toast.showDialog({
+      title: '切换华为账号',
+      message: '云笺集使用设备当前登录的华为账号。\n\n请前往“设置 > 华为账号中心”，退出当前账号并登录另一个账号；返回云笺集后，再点击“华为账号登录”。',
+      buttons: [{
+        text: '我知道了',
+        color: $r('app.color.primary'),
+        primary: true
+      }]
+    }).catch((error: BusinessError) => {
+      hilog.error(0x0000, 'CloudMailAuth',
+        `Show Huawei account switch guide failed, code=${error.code}, message=${error.message}`)
+    })
+  }
+
+  private resetHuaweiLoginForAccountSwitch(): void {
+    this.bindToken = ''
+    this.email = ''
+    this.password = ''
+    this.registerCode = ''
+    this.stage = LoginStage.HUAWEI_LOGIN
+  }
+
+  private subscribeHuaweiAccountEvents(): void {
+    const subscribeInfo: commonEventManager.CommonEventSubscribeInfo = {
+      events: [
+        commonEventManager.Support.COMMON_EVENT_DISTRIBUTED_ACCOUNT_LOGIN,
+        commonEventManager.Support.COMMON_EVENT_DISTRIBUTED_ACCOUNT_LOGOUT
+      ]
+    }
+    commonEventManager.createSubscriber(subscribeInfo)
+      .then((subscriber: commonEventManager.CommonEventSubscriber) => {
+        if (!this.isAccountEventSubscriptionActive) {
+          return
+        }
+        this.huaweiAccountSubscriber = subscriber
+        commonEventManager.subscribe(subscriber,
+          (error: BusinessError, data: commonEventManager.CommonEventData) => {
+            if (error) {
+              hilog.error(0x0000, 'CloudMailAuth',
+                `Subscribe Huawei account event failed, code=${error.code}, message=${error.message}`)
+              return
+            }
+            this.resetHuaweiLoginForAccountSwitch()
+            if (data.event === commonEventManager.Support.COMMON_EVENT_DISTRIBUTED_ACCOUNT_LOGIN) {
+              this.showToast('检测到华为账号已登录，请重新登录云笺集')
+              return
+            }
+            if (data.event === commonEventManager.Support.COMMON_EVENT_DISTRIBUTED_ACCOUNT_LOGOUT) {
+              this.showToast('检测到华为账号已退出，请在系统设置中登录其他账号')
+            }
+          })
+      })
+      .catch((error: BusinessError) => {
+        hilog.error(0x0000, 'CloudMailAuth',
+          `Create Huawei account subscriber failed, code=${error.code}, message=${error.message}`)
+      })
+  }
+
+  private unsubscribeHuaweiAccountEvents(): void {
+    const subscriber: commonEventManager.CommonEventSubscriber | null = this.huaweiAccountSubscriber
+    if (subscriber === null) {
+      return
+    }
+    this.huaweiAccountSubscriber = null
+    commonEventManager.unsubscribe(subscriber, (error: BusinessError) => {
+      if (error) {
+        hilog.error(0x0000, 'CloudMailAuth',
+          `Unsubscribe Huawei account event failed, code=${error.code}, message=${error.message}`)
+      }
     })
   }
 

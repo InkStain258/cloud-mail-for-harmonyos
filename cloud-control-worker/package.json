@@ -1,0 +1,19 @@
+{
+  "name": "yunjianji-cloud-control-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply yunjianji-platform --local",
+    "db:migrate:remote": "wrangler d1 migrations apply yunjianji-platform --remote",
+    "typecheck": "tsc --noEmit",
+    "test:logic": "node --test tests/import-policy.test.ts tests/instance-lifecycle.test.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "typescript": "^5.9.2",
+    "wrangler": "latest"
+  }
+}

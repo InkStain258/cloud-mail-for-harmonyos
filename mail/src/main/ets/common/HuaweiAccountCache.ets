@@ -8,7 +8,10 @@ export class HuaweiAccountCache {
 
   static load(context: Context, ownerEmail: string): HuaweiAccountBinding | null {
     try {
-      const cache: preferences.Preferences = HuaweiAccountCache.getPreferences(context)
+      const cache: preferences.Preferences | null = HuaweiAccountCache.getPreferences(context)
+      if (cache === null) {
+        return null
+      }
       const cachedOwner: string = cache.getSync('ownerEmail', '') as string
       if (ownerEmail === '' || cachedOwner !== ownerEmail) {
         return null
@@ -33,7 +36,10 @@ export class HuaweiAccountCache {
 
   static save(context: Context, ownerEmail: string, binding: HuaweiAccountBinding): void {
     try {
-      const cache: preferences.Preferences = HuaweiAccountCache.getPreferences(context)
+      const cache: preferences.Preferences | null = HuaweiAccountCache.getPreferences(context)
+      if (cache === null) {
+        return
+      }
       cache.putSync('ownerEmail', ownerEmail)
       cache.putSync('huaweiUserId', binding.huaweiUserId)
       cache.putSync('nickName', binding.nickName)
@@ -53,7 +59,10 @@ export class HuaweiAccountCache {
 
   static clear(context: Context, ownerEmail: string): void {
     try {
-      const cache: preferences.Preferences = HuaweiAccountCache.getPreferences(context)
+      const cache: preferences.Preferences | null = HuaweiAccountCache.getPreferences(context)
+      if (cache === null) {
+        return
+      }
       if ((cache.getSync('ownerEmail', '') as string) !== ownerEmail) {
         return
       }
@@ -74,10 +83,15 @@ export class HuaweiAccountCache {
     }
   }
 
-  private static getPreferences(context: Context): preferences.Preferences {
+  private static getPreferences(context: Context): preferences.Preferences | null {
     if (HuaweiAccountCache.cachePreferences === null) {
-      HuaweiAccountCache.cachePreferences =
-        preferences.getPreferencesSync(context, { name: HuaweiAccountCache.CACHE_NAME })
+      try {
+        HuaweiAccountCache.cachePreferences =
+          preferences.getPreferencesSync(context, { name: HuaweiAccountCache.CACHE_NAME })
+      } catch (err) {
+        console.error('open Huawei account cache failed')
+        return null
+      }
     }
     return HuaweiAccountCache.cachePreferences
   }
