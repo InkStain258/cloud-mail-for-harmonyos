@@ -1,5 +1,6 @@
 ﻿import { http } from '@kit.NetworkKit'
 import { SessionService } from './SessionService'
+import { RequestScope } from './RequestScope'
 
 export class ApiResponse {
   code: number = -1
@@ -63,11 +64,17 @@ export class HttpClient {
 
   private static async request(path: string, method: http.RequestMethod, body: string, requiresAuthorization: boolean,
     tokenOverride: string): Promise<ApiResponse> {
+    const scope: RequestScope = HttpClient.captureScope()
+    const token: string = tokenOverride === '' ? scope.token : tokenOverride
+    const url: string = HttpClient.createUrl(scope.apiBaseUrl, path)
     let lastError: ApiException = new ApiException(-1, '网络连接失败，请检查网络后重试', true)
     const retryTimes: number = method === http.RequestMethod.GET ? 2 : 1
     for (let attempt = 0; attempt < retryTimes; attempt++) {
+      HttpClient.ensureCurrentScope(scope)
       try {
-        return await HttpClient.requestOnce(path, method, body, requiresAuthorization, tokenOverride)
+        const result: ApiResponse = await HttpClient.requestOnce(url, method, body, requiresAuthorization, token, scope)
+        HttpClient.ensureCurrentScope(scope)
+        return result
       } catch (err) {
         if (err instanceof ApiException) {
           lastError = err
@@ -82,11 +89,9 @@ export class HttpClient {
     throw lastError
   }
 
-  private static async requestOnce(path: string, method: http.RequestMethod, body: string, requiresAuthorization: boolean,
-    tokenOverride: string): Promise<ApiResponse> {
+  private static async requestOnce(url: string, method: http.RequestMethod, body: string, requiresAuthorization: boolean,
+    token: string, scope: RequestScope): Promise<ApiResponse> {
     const request: http.HttpRequest = http.createHttp()
-    const token: string = tokenOverride === '' ? SessionService.getToken() : tokenOverride
-    const url: string = HttpClient.createUrl(path)
     try {
       let response: http.HttpResponse
       if (requiresAuthorization && token !== '') {
@@ -132,16 +137,24 @@ export class HttpClient {
           })
         }
       }
-      if (response.responseCode < 200 || response.responseCode >= 300) {
-        if (response.responseCode === 401) {
-          SessionService.clearSession()
-        }
-        throw new ApiException(response.responseCode, '服务器请求失败，请稍后重试', response.responseCode >= 500)
+      // A late response must never update or log out a different instance/account.
+      HttpClient.ensureCurrentScope(scope)
+      if (response.responseCode === 401) {
+        HttpClient.clearOwnedSession(scope, requiresAuthorization, token)
+        throw new ApiException(401, requiresAuthorization ? '登录已过期，请重新登录' :
+          '身份验证失败，请检查登录信息后重试', false)
       }
-      const content: string = response.result as string
-      const apiResponse: ApiResponse = JSON.parse(content) as ApiResponse
+      if (typeof response.result !== 'string') {
+        throw new ApiException(-3, '邮箱服务返回了非 API 内容，请检查服务地址', false)
+      }
+      const apiResponse: ApiResponse = HttpClient.parseResponse(response.result as string)
+      if (response.responseCode < 200 || response.responseCode >= 300) {
+        const message: string = apiResponse.message === '' ?
+          '邮箱服务请求失败（HTTP ' + response.responseCode.toString() + '）' : apiResponse.message
+        throw new ApiException(response.responseCode, message, response.responseCode >= 500)
+      }
       if (apiResponse.code === 401) {
-        SessionService.clearSession()
+        HttpClient.clearOwnedSession(scope, requiresAuthorization, token)
         throw new ApiException(401, apiResponse.message === '' ? '登录已过期，请重新登录' : apiResponse.message, false)
       }
       if (apiResponse.code !== 200) {
@@ -153,6 +166,7 @@ export class HttpClient {
       if (err instanceof ApiException) {
         throw err
       }
+      HttpClient.ensureCurrentScope(scope)
       console.error('http request failed')
       throw new ApiException(-1, '网络连接失败，请检查网络后重试', true)
     } finally {
@@ -160,13 +174,53 @@ export class HttpClient {
     }
   }
 
-  private static createUrl(path: string): string {
+  private static captureScope(): RequestScope {
+    const email: string | undefined = AppStorage.get('authEmail') as string | undefined
+    const revision: number | undefined = AppStorage.get('sessionRevision') as number | undefined
+    return new RequestScope(SessionService.getActiveInstanceId(), SessionService.getApiBaseUrl(),
+      SessionService.getToken(), email === undefined ? '' : email, revision === undefined ? 0 : revision)
+  }
+
+  private static ensureCurrentScope(scope: RequestScope): void {
+    if (!RequestScope.matches(scope, HttpClient.captureScope())) {
+      throw new ApiException(-2, '邮箱服务或登录账号已切换，已取消原请求', false)
+    }
+  }
+
+  private static clearOwnedSession(scope: RequestScope, requiresAuthorization: boolean, token: string): void {
+    if (RequestScope.canClearSession(scope, HttpClient.captureScope(), requiresAuthorization, token)) {
+      SessionService.clearSession()
+    }
+  }
+
+  private static parseResponse(content: string): ApiResponse {
+    const trimmed: string = content.trim()
+    if (!trimmed.startsWith('{')) {
+      throw new ApiException(-3, '邮箱服务返回了网页或非 API 内容，请检查服务地址及访问限制', false)
+    }
+    let parsed: ApiResponse
+    try {
+      parsed = JSON.parse(trimmed) as ApiResponse
+    } catch (parseError) {
+      throw new ApiException(-3, '邮箱服务返回了无效的 JSON 数据，请稍后重试', false)
+    }
+    if (parsed === null || typeof parsed.code !== 'number' || !Number.isFinite(parsed.code)) {
+      throw new ApiException(-3, '邮箱服务返回的数据格式不兼容，请检查服务地址', false)
+    }
+    const response: ApiResponse = new ApiResponse()
+    response.code = parsed.code
+    response.message = typeof parsed.message === 'string' ? parsed.message : ''
+    response.data = parsed.data === undefined ? null : parsed.data
+    return response
+  }
+
+  private static createUrl(apiBaseUrl: string, path: string): string {
     if (path.indexOf('http://') === 0 || path.indexOf('https://') === 0) {
       return path
     }
     if (path.indexOf('/') === 0) {
-      return SessionService.getApiBaseUrl() + path
+      return apiBaseUrl + path
     }
-    return SessionService.getApiBaseUrl() + '/' + path
+    return apiBaseUrl + '/' + path
   }
 }

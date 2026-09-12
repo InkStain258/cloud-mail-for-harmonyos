@@ -1,0 +1,33 @@
+{
+  "string": [
+    { "name": "draft_status_new", "value": "草稿仅保存在本机，按服务和账号隔离" },
+    { "name": "draft_status_saving", "value": "正在保存草稿…" },
+    { "name": "draft_status_saved", "value": "草稿已保存到本机" },
+    { "name": "draft_save_failed", "value": "草稿未保存，请检查存储空间后重试，暂勿关闭页面" },
+    { "name": "draft_delete_failed", "value": "草稿删除失败，原草稿仍保留" },
+    { "name": "draft_owner_changed", "value": "服务或账号已切换，请回到原账号继续编辑，不能用当前账号发送" },
+    { "name": "draft_sender_identity", "value": "所属主邮箱：%s" },
+    { "name": "draft_cc_unsupported", "value": "当前服务接口不支持抄送和密送" },
+    { "name": "draft_legacy_cc", "value": "旧草稿已保留的抄送：%s\n密送：%s" },
+    { "name": "draft_clear_unsupported", "value": "清除这些抄送和密送地址" },
+    { "name": "draft_cc_blocked", "value": "请先处理旧草稿的抄送和密送地址，不会静默忽略收件人" },
+    { "name": "draft_sending", "value": "正在发送…" },
+    { "name": "draft_send", "value": "发送" },
+    { "name": "draft_wait_operation", "value": "正在处理附件或发送邮件，请稍候" },
+    { "name": "draft_send_unknown", "value": "发送结果暂不明确，草稿已保留，请先检查已发送，勿重复发送" },
+    { "name": "draft_retry_title", "value": "确认再次发送" },
+    { "name": "draft_retry_message", "value": "上次请求可能已经发送成功。请先检查此账号的已发送邮件，确认未发送后再重试，以免重复投递。" },
+    { "name": "draft_retry_confirm", "value": "已检查，仍要发送" },
+    { "name": "draft_cancel", "value": "取消" },
+    { "name": "draft_sent_cleanup_failed", "value": "邮件已发送，但本机草稿未清理，请勿再次发送，可稍后手动删除草稿" },
+    { "name": "draft_attachment_restore_failed", "value": "草稿附件缺失或无法读取，邮件未发送。请移除有问题的附件后重新添加" },
+    { "name": "draft_attachment_too_large", "value": "单个附件不能超过 10 MB" },
+    { "name": "draft_attachment_import_failed", "value": "附件保存失败，请检查文件访问权限和本机存储空间" },
+    { "name": "draft_storage_unavailable", "value": "草稿存储读取失败，原始数据已保留。请勿卸载应用，检查存储空间后重启重试" },
+    { "name": "draft_legacy_notice", "value": "发现 %d 份旧版本草稿，无法确定所属服务及账号。请确认归属后导入，不会自动使用当前账号发送。" },
+    { "name": "draft_import_title", "value": "导入旧草稿" },
+    { "name": "draft_import_message", "value": "确认这些旧草稿属于主邮箱 %s（服务：%s）？导入后仅在此账号下显示，请核对收件人和发件身份后再发送。" },
+    { "name": "draft_import_confirm", "value": "确认归属并导入" },
+    { "name": "draft_import_failed", "value": "部分草稿未导入，未处理的原始草稿仍保留，请确认账号和存储空间后重试" }
+  ]
+}

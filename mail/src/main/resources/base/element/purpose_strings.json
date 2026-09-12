@@ -1,0 +1,124 @@
+{
+  "string": [
+    {
+      "name": "purpose_title",
+      "value": "用途子地址"
+    },
+    {
+      "name": "purpose_back",
+      "value": "返回"
+    },
+    {
+      "name": "purpose_close",
+      "value": "关闭"
+    },
+    {
+      "name": "purpose_explanation",
+      "value": "给现有邮箱加上 +用途，例如 name+shop@domain。邮件仍进入原邮箱，不会新建独立账号，也不能单独登录。标签仅保存在本机；删除标签不会停用收信地址，部分网站可能不接受含 + 的地址。"
+    },
+    {
+      "name": "purpose_checking",
+      "value": "正在确认当前服务是否支持用途子地址…"
+    },
+    {
+      "name": "purpose_unsupported",
+      "value": "当前服务尚未明确提供用途子地址能力，暂不开放创建或复制。请确认服务已升级并支持此功能后再试。已有本机标签仍可查看和移除。"
+    },
+    {
+      "name": "purpose_retry",
+      "value": "重新检查"
+    },
+    {
+      "name": "purpose_saved_labels",
+      "value": "本机用途标签"
+    },
+    {
+      "name": "purpose_empty",
+      "value": "还没有用途标签，可为购物、订阅等场景创建不同地址。"
+    },
+    {
+      "name": "purpose_create_title",
+      "value": "新建用途标签"
+    },
+    {
+      "name": "purpose_label_placeholder",
+      "value": "用途名称，例如购物、订阅"
+    },
+    {
+      "name": "purpose_tag_placeholder",
+      "value": "地址后缀，例如 shop"
+    },
+    {
+      "name": "purpose_tag_hint",
+      "value": "后缀使用 1–32 位英文字母或数字，可包含 - 和 _。"
+    },
+    {
+      "name": "purpose_save",
+      "value": "保存用途标签"
+    },
+    {
+      "name": "purpose_copy",
+      "value": "复制地址"
+    },
+    {
+      "name": "purpose_remove",
+      "value": "移除本机标签"
+    },
+    {
+      "name": "purpose_cancel",
+      "value": "取消"
+    },
+    {
+      "name": "purpose_remove_warning",
+      "value": "仅移除此设备上保存的用途标签，不会删除邮箱或邮件，也不会停止这个地址接收邮件。"
+    },
+    {
+      "name": "purpose_saved",
+      "value": "用途标签已保存"
+    },
+    {
+      "name": "purpose_copied",
+      "value": "用途地址已复制"
+    },
+    {
+      "name": "purpose_copy_failed",
+      "value": "复制失败，请重试"
+    },
+    {
+      "name": "purpose_removed",
+      "value": "已移除本机标签，地址仍可收信"
+    },
+    {
+      "name": "purpose_storage_failed",
+      "value": "本机标签读取或保存失败，请重新打开页面；原有数据不会被清空。"
+    },
+    {
+      "name": "purpose_invalid_tag",
+      "value": "后缀需以英文字母或数字开头，限 1–32 位字母、数字、- 或 _。"
+    },
+    {
+      "name": "purpose_invalid_label",
+      "value": "请输入 1–30 字的用途名称，不能包含换行等控制字符。"
+    },
+    {
+      "name": "purpose_invalid_mailbox",
+      "value": "这个邮箱地址暂不支持生成用途子地址。"
+    },
+    {
+      "name": "purpose_address_too_long",
+      "value": "完整地址过长，请缩短后缀或选择更短的邮箱地址。"
+    },
+    {
+      "name": "purpose_duplicate",
+      "value": "这个地址后缀已存在，请使用其他后缀。"
+    },
+    {
+      "name": "purpose_limit",
+      "value": "每个邮箱最多保存 30 个本机用途标签。"
+    },
+    {
+      "name": "purpose_session_changed",
+      "value": "登录账号或服务已切换，请重新打开用途子地址。"
+    }
+  ]
+}

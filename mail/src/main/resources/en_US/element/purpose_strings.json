@@ -1,0 +1,124 @@
+{
+  "string": [
+    {
+      "name": "purpose_title",
+      "value": "Purpose addresses"
+    },
+    {
+      "name": "purpose_back",
+      "value": "Back"
+    },
+    {
+      "name": "purpose_close",
+      "value": "Close"
+    },
+    {
+      "name": "purpose_explanation",
+      "value": "Add +purpose to an existing mailbox, for example name+shop@domain. Messages arrive in the original mailbox; no separate account or login is created. Labels are stored only on this device. Removing a label does not disable delivery. Some websites do not accept + addresses."
+    },
+    {
+      "name": "purpose_checking",
+      "value": "Checking this service’s support for purpose addresses…"
+    },
+    {
+      "name": "purpose_unsupported",
+      "value": "This service has not confirmed support for purpose addresses. Creation and copying are unavailable. Retry after the service supports this feature. Existing local labels can still be viewed or removed."
+    },
+    {
+      "name": "purpose_retry",
+      "value": "Check again"
+    },
+    {
+      "name": "purpose_saved_labels",
+      "value": "Labels on this device"
+    },
+    {
+      "name": "purpose_empty",
+      "value": "No labels yet. Create different addresses for shopping, subscriptions, and other purposes."
+    },
+    {
+      "name": "purpose_create_title",
+      "value": "New purpose label"
+    },
+    {
+      "name": "purpose_label_placeholder",
+      "value": "Label, e.g. Shopping or Subscriptions"
+    },
+    {
+      "name": "purpose_tag_placeholder",
+      "value": "Address tag, e.g. shop"
+    },
+    {
+      "name": "purpose_tag_hint",
+      "value": "Use 1–32 letters or digits; hyphens and underscores are allowed."
+    },
+    {
+      "name": "purpose_save",
+      "value": "Save label"
+    },
+    {
+      "name": "purpose_copy",
+      "value": "Copy address"
+    },
+    {
+      "name": "purpose_remove",
+      "value": "Remove local label"
+    },
+    {
+      "name": "purpose_cancel",
+      "value": "Cancel"
+    },
+    {
+      "name": "purpose_remove_warning",
+      "value": "Only the label saved on this device will be removed. The mailbox and messages remain, and this address will continue to receive mail."
+    },
+    {
+      "name": "purpose_saved",
+      "value": "Label saved"
+    },
+    {
+      "name": "purpose_copied",
+      "value": "Purpose address copied"
+    },
+    {
+      "name": "purpose_copy_failed",
+      "value": "Could not copy. Please try again."
+    },
+    {
+      "name": "purpose_removed",
+      "value": "Local label removed. The address still receives mail."
+    },
+    {
+      "name": "purpose_storage_failed",
+      "value": "Could not read or save local labels. Reopen this page. Existing data has not been cleared."
+    },
+    {
+      "name": "purpose_invalid_tag",
+      "value": "Start the tag with a letter or digit. Use 1–32 letters, digits, hyphens, or underscores."
+    },
+    {
+      "name": "purpose_invalid_label",
+      "value": "Enter a 1–30 character label without line breaks or control characters."
+    },
+    {
+      "name": "purpose_invalid_mailbox",
+      "value": "Purpose addresses cannot be generated for this mailbox."
+    },
+    {
+      "name": "purpose_address_too_long",
+      "value": "The address is too long. Shorten the tag or choose a shorter mailbox address."
+    },
+    {
+      "name": "purpose_duplicate",
+      "value": "This address tag already exists. Choose a different tag."
+    },
+    {
+      "name": "purpose_limit",
+      "value": "Save up to 30 local purpose labels per mailbox."
+    },
+    {
+      "name": "purpose_session_changed",
+      "value": "The account or service has changed. Reopen purpose addresses."
+    }
+  ]
+}

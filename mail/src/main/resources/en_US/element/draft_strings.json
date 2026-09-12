@@ -1,0 +1,33 @@
+{
+  "string": [
+    { "name": "draft_status_new", "value": "Drafts stay on this device, separated by service and account" },
+    { "name": "draft_status_saving", "value": "Saving draft…" },
+    { "name": "draft_status_saved", "value": "Draft saved on this device" },
+    { "name": "draft_save_failed", "value": "Draft was not saved. Check device storage and retry before leaving" },
+    { "name": "draft_delete_failed", "value": "Could not delete draft. The original is preserved" },
+    { "name": "draft_owner_changed", "value": "Service or account changed. Return to the original account to edit or send" },
+    { "name": "draft_sender_identity", "value": "Primary account: %s" },
+    { "name": "draft_cc_unsupported", "value": "The current service API does not support Cc or Bcc" },
+    { "name": "draft_legacy_cc", "value": "Preserved Cc: %s\nBcc: %s" },
+    { "name": "draft_clear_unsupported", "value": "Clear these Cc and Bcc addresses" },
+    { "name": "draft_cc_blocked", "value": "Review and clear legacy Cc/Bcc addresses first. Recipients will not be silently ignored" },
+    { "name": "draft_sending", "value": "Sending…" },
+    { "name": "draft_send", "value": "Send" },
+    { "name": "draft_wait_operation", "value": "Please wait while attachments or sending are being processed" },
+    { "name": "draft_send_unknown", "value": "Delivery result is unknown. Draft preserved. Check Sent before retrying" },
+    { "name": "draft_retry_title", "value": "Send again?" },
+    { "name": "draft_retry_message", "value": "The previous request may have succeeded. Check this account's Sent folder before retrying to avoid duplicate delivery." },
+    { "name": "draft_retry_confirm", "value": "Checked, send again" },
+    { "name": "draft_cancel", "value": "Cancel" },
+    { "name": "draft_sent_cleanup_failed", "value": "Mail sent, but local draft cleanup failed. Do not send again. Delete the draft manually later" },
+    { "name": "draft_attachment_restore_failed", "value": "A draft attachment is missing or unreadable. Nothing was sent. Remove and reattach the file" },
+    { "name": "draft_attachment_too_large", "value": "Each attachment must be 10 MB or smaller" },
+    { "name": "draft_attachment_import_failed", "value": "Could not save attachment. Check file permissions and device storage" },
+    { "name": "draft_storage_unavailable", "value": "Draft storage could not be read. Original data is preserved. Do not uninstall; check storage and restart" },
+    { "name": "draft_legacy_notice", "value": "Found %d legacy drafts with no known account or service. Confirm ownership before importing. They will not be sent automatically." },
+    { "name": "draft_import_title", "value": "Import legacy drafts" },
+    { "name": "draft_import_message", "value": "Do these drafts belong to %s (service: %s)? Imported drafts will only appear for that account. Review recipients and sender before sending." },
+    { "name": "draft_import_confirm", "value": "Confirm and import" },
+    { "name": "draft_import_failed", "value": "Some drafts were not imported. Their originals are preserved. Check your account and storage before retrying" }
+  ]
+}

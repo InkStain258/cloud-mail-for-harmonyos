@@ -1,0 +1,17 @@
+{
+  "string": [
+    { "name": "mail_history_scope", "value": "已搜索 %d 封邮件（发件人、收件人和主题）" },
+    { "name": "mail_history_partial_empty", "value": "已搜索范围内暂无匹配，仍可继续搜索更早邮件" },
+    { "name": "mail_history_complete_empty", "value": "所有历史邮件中未找到匹配的发件人、收件人或主题" },
+    { "name": "mail_history_continue", "value": "继续搜索更早邮件" },
+    { "name": "mail_history_searching", "value": "正在搜索更早邮件…" },
+    { "name": "mail_history_cancel", "value": "停止搜索" },
+    { "name": "mail_history_finished", "value": "已搜索全部历史邮件" },
+    { "name": "mail_history_stalled", "value": "服务未返回更早邮件，当前搜索范围可能不完整，请下拉刷新重试" },
+    { "name": "mail_history_load_more", "value": "加载更早邮件" },
+    { "name": "mail_history_loading_more", "value": "正在加载更早邮件…" },
+    { "name": "mail_history_load_failed", "value": "邮件加载失败，请重试" },
+    { "name": "mail_history_retry", "value": "重试" },
+    { "name": "mail_history_all_loaded", "value": "已加载全部邮件" }
+  ]
+}

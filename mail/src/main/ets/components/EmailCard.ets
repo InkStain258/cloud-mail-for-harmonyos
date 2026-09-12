@@ -1,5 +1,6 @@
 ﻿import Constants from '../common/Constants'
 import { AvatarBar } from './AvatarBar'
+import { VerificationCodeCard } from './VerificationCodeCard'
 
 @Component
 export struct EmailCard {
@@ -8,67 +9,80 @@ export struct EmailCard {
   @Prop time: string = ''
   @Prop unread: boolean = false
   @Prop status: string = ''
+  @Prop verificationCode: string = ''
   onCardClick?: () => void
 
   build() {
-    Row() {
-      AvatarBar({ name: this.name, avatarSize: 44, fontSize: 18 })
-        .margin({ right: 12 })
+    Column() {
+      Row() {
+        AvatarBar({ name: this.name, avatarSize: 44, fontSize: 18 })
+          .margin({ right: 12 })
 
-      Column() {
-        Row() {
-          Text(this.name)
-            .fontSize(16)
-            .fontWeight(this.unread ? FontWeight.Bold : FontWeight.Medium)
-            .fontColor($r('app.color.text_primary'))
+        Column() {
+          Row() {
+            Text(this.name)
+              .fontSize(16)
+              .fontWeight(this.unread ? FontWeight.Bold : FontWeight.Medium)
+              .fontColor($r('app.color.text_primary'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+              .animation({ duration: 300, curve: Curve.EaseInOut })
+            Text(this.time)
+              .fontSize(12)
+              .fontColor($r('app.color.text_tertiary'))
+          }
+          .width('100%')
+
+          Text(this.subject)
+            .fontSize(14)
+            .fontWeight(this.unread ? FontWeight.Medium : FontWeight.Normal)
+            .fontColor($r('app.color.text_secondary'))
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1)
+            .margin({ top: 4 })
+            .width('100%')
             .animation({ duration: 300, curve: Curve.EaseInOut })
-          Text(this.time)
-            .fontSize(12)
-            .fontColor($r('app.color.text_tertiary'))
+
+          if (this.status !== '') {
+            Text(this.status)
+              .fontSize(10)
+              .fontColor($r('app.color.tag_text'))
+              .backgroundColor($r('app.color.success'))
+              .borderRadius(Constants.RADIUS_SMALL)
+              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+              .margin({ top: 6 })
+          }
         }
-        .width('100%')
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
 
-        Text(this.subject)
-          .fontSize(14)
-          .fontWeight(this.unread ? FontWeight.Medium : FontWeight.Normal)
-          .fontColor($r('app.color.text_secondary'))
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .margin({ top: 4 })
-          .width('100%')
-          .animation({ duration: 300, curve: Curve.EaseInOut })
-
-        if (this.status !== '') {
-          Text(this.status)
-            .fontSize(10)
-            .fontColor($r('app.color.tag_text'))
-            .backgroundColor($r('app.color.success'))
-            .borderRadius(Constants.RADIUS_SMALL)
-            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .margin({ top: 6 })
+        if (this.unread) {
+          Circle()
+            .width(8)
+            .height(8)
+            .foregroundColor($r('app.color.primary'))
+            .margin({ left: 8 })
         }
       }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-
-      if (this.unread) {
-        Circle()
-          .width(8)
-          .height(8)
-          .foregroundColor($r('app.color.primary'))
-          .margin({ left: 8 })
+      .width('100%')
+      .padding({ top: 14, bottom: 14, left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
+      .borderRadius(Constants.RADIUS_CARD)
+      .onClick(() => {
+        if (this.onCardClick) { this.onCardClick() }
+      })
+      // Sibling regions keep the native copy button outside the message's click target.
+      if (this.verificationCode !== '') {
+        Column() {
+          VerificationCodeCard({ code: this.verificationCode, compact: true })
+        }
+        .width('100%')
+        .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE, bottom: 12 })
       }
     }
     .width('100%')
-    .padding({ top: 14, bottom: 14, left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
     .borderRadius(Constants.RADIUS_CARD)
     .backgroundColor($r('app.color.card'))
     .margin({ top: 4, bottom: 4 })
-    .onClick(() => {
-      if (this.onCardClick) { this.onCardClick() }
-    })
   }
 }

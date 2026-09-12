@@ -8,17 +8,22 @@ import { AccountResult, AccountService, ManagedAccount } from '../common/Account
 import { AccountCard } from '../components/AccountCard'
 import { EmptyState } from '../components/EmptyState'
 import { SessionService } from '../common/SessionService'
+import { PurposeAddressScope, PurposeAddressStore } from '../common/PurposeAddressStore'
+import { PurposeAddressPanel } from '../components/PurposeAddressPanel'
 
 @Component
 export struct AccountsPage {
   private scroller: Scroller = new Scroller()
   @StorageLink('authEmail') authEmail: string = ''
   @StorageLink('accountRevision') @Watch('onAccountRevision') accountRevision: number = 0
+  @StorageLink('sessionRevision') @Watch('onSessionRevision') sessionRevision: number = 0
   @State accountList: ManagedAccount[] = []
   @State showRegisterDialog: boolean = false
   @State secondaryEmail: string = ''
   @State deleteAccountId: number = 0
   @State deleteAccountEmail: string = ''
+  @State showPurposeAddresses: boolean = false
+  @State purposeBaseEmail: string = ''
   private toast: PromptAction = this.getUIContext().getPromptAction()
 
   aboutToAppear(): void {
@@ -26,6 +31,13 @@ export struct AccountsPage {
   }
 
   private onAccountRevision(): void {
+    this.refreshAccounts()
+  }
+
+  private onSessionRevision(): void {
+    this.showPurposeAddresses = false
+    this.purposeBaseEmail = ''
+    this.accountList = []
     this.refreshAccounts()
   }
 
@@ -66,13 +78,42 @@ export struct AccountsPage {
             List({ scroller: this.scroller }) {
               ForEach(this.accountList, (item: ManagedAccount) => {
                 ListItem() {
-                  AccountCard({
-                    email: item.email,
-                    unread: item.unread,
-                    total: item.total,
-                    isPrimary: item.isPrimary,
-                    onDeleteClick: () => { this.openDeleteDialog(item) }
+                  Column() {
+                    AccountCard({
+                      email: item.email,
+                      unread: item.unread,
+                      total: item.total,
+                      isPrimary: item.isPrimary,
+                      onDeleteClick: () => { this.openDeleteDialog(item) }
+                    })
+                    Button({ type: ButtonType.Normal, stateEffect: true }) {
+                      Row({ space: 8 }) {
+                        SymbolGlyph($r('sys.symbol.envelope'))
+                          .fontSize(Constants.SIZE_ICON_SMALL)
+                          .fontColor([$r('app.color.primary')])
+                        Text($r('app.string.purpose_title'))
+                          .fontSize(Constants.FONT_SIZE_COMMON)
+                          .fontColor($r('app.color.primary'))
+                          .layoutWeight(1)
+                          .textAlign(TextAlign.Start)
+                        SymbolGlyph($r('sys.symbol.chevron_forward'))
+                          .fontSize(14)
+                          .fontColor([$r('app.color.text_tertiary')])
+                      }
+                      .width('100%')
+                  }
+                  .width('100%')
+                  .height(44)
+                  .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
+                  .borderRadius(Constants.RADIUS_CARD)
+                  .backgroundColor($r('app.color.card'))
+                  .margin({ bottom: Constants.GAP_MEDIUM })
+                  .onClick(() => {
+                    this.purposeBaseEmail = item.email
+                    this.showPurposeAddresses = true
                   })
+                  }
+                  .width('100%')
                 }
               }, (item: ManagedAccount): string => item.id.toString())
             }
@@ -127,6 +168,22 @@ export struct AccountsPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
+    .bindSheet($$this.showPurposeAddresses, this.PurposeAddressesSheet(), {
+      height: '84%',
+      dragBar: false,
+      showClose: false,
+      blurStyle: BlurStyle.COMPONENT_THICK,
+      maskColor: $r('app.color.overlay'),
+      enableOutsideInteractive: false
+    })
+  }
+
+  @Builder
+  private PurposeAddressesSheet() {
+    PurposeAddressPanel({
+      baseEmail: this.purposeBaseEmail,
+      onClose: () => { this.showPurposeAddresses = false }
+    })
   }
 
   @Builder
@@ -240,9 +297,13 @@ export struct AccountsPage {
   }
 
   private async refreshAccounts(): Promise<void> {
+    const scope: PurposeAddressScope = PurposeAddressStore.capture(this.authEmail)
     try {
-      this.accountList = await AccountService.getAccounts(this.authEmail)
+      const accounts: ManagedAccount[] = await AccountService.getAccounts(scope.ownerEmail)
+      if (!PurposeAddressStore.isCurrent(scope)) { return }
+      this.accountList = accounts
     } catch (err) {
+      if (!PurposeAddressStore.isCurrent(scope)) { return }
       if (err instanceof ApiException) {
         this.showToast(err.message)
       } else {

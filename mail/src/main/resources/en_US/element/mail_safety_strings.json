@@ -1,0 +1,6 @@
+{
+  "string": [
+    { "name": "mail_source_changed", "value": "Your account or service has changed. Please reopen this email." },
+    { "name": "account_stats_unavailable", "value": "Not available" }
+  ]
+}

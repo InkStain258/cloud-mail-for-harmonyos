@@ -19,6 +19,9 @@ import { ProfileApi } from '../api/ProfileApi'
 import { DateTimeUtils } from '../common/DateTimeUtils'
 import { HuaweiAccountCache } from '../common/HuaweiAccountCache'
 import { MailStatsStore } from '../common/MailStatsStore'
+import { InstanceService } from '../common/InstanceService'
+import { InstanceRegistry } from '../common/InstanceRegistry'
+import { SessionService } from '../common/SessionService'
 import { setAppColorMode } from '../mailability/MailAbility'
 
 class ChangeLogItem {
@@ -45,6 +48,7 @@ export struct SettingsPage {
   @StorageLink('authRole') authRole: string = 'user'
   @StorageLink('platformRole') platformRole: string = 'MEMBER'
   @StorageLink('authRoleName') authRoleName: string = '普通用户'
+  @StorageLink('sessionRevision') @Watch('onSessionRevisionChanged') sessionRevision: number = 0
   @StorageLink('currentColorMode') currentColorMode: number = ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET
   @State showLogoutConfirm: boolean = false
   @State showAboutSheet: boolean = false
@@ -65,7 +69,11 @@ export struct SettingsPage {
   @StorageLink('mailReceiveCount') receiveMailCount: number = 0
   @StorageLink('mailSentCount') sentMailCount: number = 0
   @StorageLink('mailStarCount') starMailCount: number = 0
+  @StorageLink('mailReceiveCountReady') receiveMailCountReady: boolean = false
+  @StorageLink('mailSentCountReady') sentMailCountReady: boolean = false
+  @StorageLink('mailStarCountReady') starMailCountReady: boolean = false
   @State huaweiIdentityLoaded: boolean = false
+  private identityRequestSequence: number = 0
   private readonly themeItems: SegmentButtonV2Items = new SegmentButtonV2Items([
     { text: $r('app.string.settings_theme_system') },
     { text: $r('app.string.settings_theme_light') },
@@ -74,6 +82,15 @@ export struct SettingsPage {
   private readonly repositoryUrl: string = 'https://github.com/Riordon666/cloud-mail-for-harmonyos'
   private readonly telegramGroupUrl: string = 'https://t.me/CloudMailforHarmonyOSGroup'
   private readonly changeLogs: ChangeLogItem[] = [
+    new ChangeLogItem('1.2.1', '2026.09.12', [
+      '优化邮件列表加载，支持兼容服务的摘要读取与按需正文缓存',
+      '支持继续加载历史邮件，并完善邮件全文搜索',
+      '新增邮件验证码卡片与一键复制',
+      '新增用途子地址管理，支持为不同用途创建和复制收件地址',
+      '完善草稿自动保存、附件恢复与发送前检查',
+      '加强多邮箱实例的会话、邮件与附件隔离',
+      '优化账号中心统计刷新与草稿卡片点击体验'
+    ]),
     new ChangeLogItem('1.2.0', '2026.08.27', [
       '新增多邮箱服务实例接入与切换',
       '支持一个华为账号绑定多个实例主邮箱',
@@ -137,6 +154,15 @@ export struct SettingsPage {
       this.currentColorMode = ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET
     }
     this.loadHuaweiIdentity()
+  }
+
+  aboutToDisappear(): void {
+    this.identityRequestSequence++
+  }
+
+  private onSessionRevisionChanged(): void {
+    this.userCreateTime = ''
+    this.loadHuaweiIdentity(true)
   }
 
   build() {
@@ -468,13 +494,13 @@ export struct SettingsPage {
                 this.AccountStatCard('注册时间', this.getRegistrationTime(), $r('sys.symbol.clock'))
               }
               GridItem() {
-                this.AccountStatCard('收到邮件', this.receiveMailCount.toString(), $r('sys.symbol.envelope'))
+                this.AccountStatCard('收到邮件', this.getMailCountText(this.receiveMailCount, this.receiveMailCountReady), $r('sys.symbol.envelope'))
               }
               GridItem() {
-                this.AccountStatCard('发送邮件', this.sentMailCount.toString(), $r('sys.symbol.paperplane'))
+                this.AccountStatCard('发送邮件', this.getMailCountText(this.sentMailCount, this.sentMailCountReady), $r('sys.symbol.paperplane'))
               }
               GridItem() {
-                this.AccountStatCard('星标邮件', this.starMailCount.toString(), $r('sys.symbol.star'))
+                this.AccountStatCard('星标邮件', this.getMailCountText(this.starMailCount, this.starMailCountReady), $r('sys.symbol.star'))
               }
             }
             .columnsTemplate('1fr 1fr')
@@ -1346,7 +1372,7 @@ export struct SettingsPage {
       return info.versionName
     } catch (err) {
       console.error('get app version failed')
-      return '1.2.0'
+      return '1.2.1'
     }
   }
 
@@ -1357,7 +1383,7 @@ export struct SettingsPage {
       return info.versionCode
     } catch (err) {
       console.error('get app version code failed')
-      return 1020000
+      return 1020001
     }
   }
 
@@ -1456,28 +1482,40 @@ export struct SettingsPage {
 
   private async loadHuaweiIdentity(forceRefresh: boolean = false): Promise<void> {
     const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext
-    const cachedBinding: HuaweiAccountBinding | null = HuaweiAccountCache.load(context, this.authEmail)
+    const ownerEmail: string = InstanceService.getAnchorEmail()
+    const sourceToken: string = InstanceService.getAnchorToken()
+    const requestRevision: number = this.sessionRevision
+    const requestId: number = ++this.identityRequestSequence
+    const cachedBinding: HuaweiAccountBinding | null = HuaweiAccountCache.load(context, ownerEmail)
     if (cachedBinding !== null) {
       this.applyHuaweiIdentity(cachedBinding, false)
-      MailStatsStore.syncMissing(cachedBinding.receiveCount, cachedBinding.sentCount, cachedBinding.starCount)
+      if (this.canUseAnchorAccountData(cachedBinding.primaryEmail)) {
+        MailStatsStore.syncMissing(cachedBinding.receiveCount, cachedBinding.sentCount, cachedBinding.starCount)
+      }
       this.huaweiIdentityLoaded = true
     }
-    if (!forceRefresh && !HuaweiAccountCache.shouldRefresh(this.authEmail)) {
+    if (!forceRefresh && !HuaweiAccountCache.shouldRefresh(ownerEmail)) {
       this.huaweiIdentityLoaded = true
       return
     }
     try {
       const binding: HuaweiAccountBinding | null = await HuaweiAccountApi.current()
+      if (requestId !== this.identityRequestSequence || requestRevision !== this.sessionRevision ||
+        ownerEmail !== InstanceService.getAnchorEmail() || sourceToken !== InstanceService.getAnchorToken()) {
+        return
+      }
       this.huaweiIdentityLoaded = true
       if (binding === null) {
         return
       }
       this.applyHuaweiIdentity(binding)
-      HuaweiAccountCache.save(context, this.authEmail, binding)
-      HuaweiAccountCache.markRefreshed(this.authEmail)
+      HuaweiAccountCache.save(context, ownerEmail, binding)
+      HuaweiAccountCache.markRefreshed(ownerEmail)
     } catch (err) {
-      this.huaweiIdentityLoaded = true
-      console.error('load Huawei identity failed')
+      if (requestId === this.identityRequestSequence) {
+        this.huaweiIdentityLoaded = true
+        console.error('load Huawei identity failed')
+      }
     }
   }
 
@@ -1486,8 +1524,8 @@ export struct SettingsPage {
     this.huaweiAvatarUrl = binding.avatarUrl
     this.huaweiPrimaryEmail = binding.primaryEmail
     this.huaweiUserId = binding.huaweiUserId
-    this.userCreateTime = binding.userCreateTime
-    if (syncStats) {
+    this.userCreateTime = this.canUseAnchorAccountData(binding.primaryEmail) ? binding.userCreateTime : ''
+    if (syncStats && this.canUseAnchorAccountData(binding.primaryEmail)) {
       MailStatsStore.sync(binding.receiveCount, binding.sentCount, binding.starCount)
     }
   }
@@ -1520,7 +1558,23 @@ export struct SettingsPage {
   }
 
   private getRegistrationTime(): string {
-    return DateTimeUtils.formatUtcDateTime(this.userCreateTime, '暂无')
+    const fallback: string = this.getUnavailableStatText()
+    return this.canUseAnchorAccountData(this.huaweiPrimaryEmail) ?
+      DateTimeUtils.formatUtcDateTime(this.userCreateTime, fallback) : fallback
+  }
+
+  private canUseAnchorAccountData(primaryEmail: string): boolean {
+    return primaryEmail !== '' && SessionService.getActiveInstanceId() === InstanceRegistry.getDefaultInstanceId() &&
+      primaryEmail === ((AppStorage.get('authEmail') as string) || '') &&
+      primaryEmail === InstanceService.getAnchorEmail()
+  }
+
+  private getMailCountText(value: number, ready: boolean): string {
+    return ready && Number.isFinite(value) && value >= 0 ? value.toString() : this.getUnavailableStatText()
+  }
+
+  private getUnavailableStatText(): string {
+    return this.getUIContext().getHostContext()!.resourceManager.getStringSync($r('app.string.account_stats_unavailable').id)
   }
 
   private async changePassword(): Promise<void> {

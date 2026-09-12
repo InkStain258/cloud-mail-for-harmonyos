@@ -1,0 +1,11 @@
+{
+  "string": [
+    { "name": "verification_code_title", "value": "Verification code" },
+    { "name": "verification_code_copy", "value": "Copy" },
+    { "name": "verification_code_copied", "value": "Verification code copied" },
+    { "name": "verification_code_copy_failed", "value": "Could not copy. Try again." },
+    { "name": "mail_detail_loading", "value": "Loading the full message…" },
+    { "name": "mail_detail_retry", "value": "Reload message" },
+    { "name": "mail_detail_not_ready", "value": "Please wait for the full message to load." }
+  ]
+}

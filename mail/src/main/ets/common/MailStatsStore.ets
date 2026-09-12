@@ -1,3 +1,5 @@
+﻿import { InstanceRegistry } from './InstanceRegistry'
+
 export class MailStatsStore {
   private static readonly OWNER_KEY: string = 'mailStatsOwnerEmail'
   private static readonly RECEIVE_KEY: string = 'mailReceiveCount'
@@ -20,10 +22,11 @@ export class MailStatsStore {
 
   static setOwner(ownerEmail: string): void {
     const currentOwner: string = MailStatsStore.getString(MailStatsStore.OWNER_KEY)
-    if (currentOwner === ownerEmail) {
+    const ownerKey: string = ownerEmail === '' ? '' : InstanceRegistry.getActiveInstanceId() + '|' + ownerEmail
+    if (currentOwner === ownerKey) {
       return
     }
-    MailStatsStore.setString(MailStatsStore.OWNER_KEY, ownerEmail)
+    MailStatsStore.setString(MailStatsStore.OWNER_KEY, ownerKey)
     MailStatsStore.resetCounts()
   }
 
@@ -85,14 +88,19 @@ export class MailStatsStore {
 
   static incrementSent(): void {
     MailStatsStore.ensureCurrentOwner()
+    // A delta cannot establish an unknown total for an external instance.
+    if (!MailStatsStore.getBoolean(MailStatsStore.SENT_READY_KEY)) {
+      return
+    }
     MailStatsStore.setCount(MailStatsStore.SENT_KEY, MailStatsStore.getCount(MailStatsStore.SENT_KEY) + 1)
-    MailStatsStore.setBoolean(MailStatsStore.SENT_READY_KEY, true)
   }
 
   static adjustStar(delta: number): void {
     MailStatsStore.ensureCurrentOwner()
+    if (!MailStatsStore.getBoolean(MailStatsStore.STAR_READY_KEY)) {
+      return
+    }
     MailStatsStore.setCount(MailStatsStore.STAR_KEY, MailStatsStore.getCount(MailStatsStore.STAR_KEY) + delta)
-    MailStatsStore.setBoolean(MailStatsStore.STAR_READY_KEY, true)
   }
 
   private static ensureCurrentOwner(): void {

@@ -5,6 +5,8 @@ import { InstanceRegistry } from './InstanceRegistry'
 import { MailInstance, PlatformInstance } from './InstanceModels'
 import { MailStatsStore } from './MailStatsStore'
 import { SecureTokenStore } from './SecureTokenStore'
+import { DraftService } from './DraftService'
+import { MailDetailCache } from './MailDetailCache'
 
 export class SessionService {
   private static sessionPreferences: preferences.Preferences | null = null
@@ -54,6 +56,7 @@ export class SessionService {
   }
 
   static saveSession(token: string, email: string, role: string, roleName: string, accountId: number): void {
+    DraftService.flushActiveEditor()
     MailStatsStore.setOwner(email)
     AppStorage.set('authToken', token)
     AppStorage.set('authEmail', email)
@@ -80,6 +83,8 @@ export class SessionService {
   }
 
   static clearSession(): void {
+    SessionService.preserveDraftBeforeSignOut()
+    MailDetailCache.clear()
     MailStatsStore.reset()
     AppStorage.set('authToken', '')
     AppStorage.set('authEmail', '')
@@ -105,6 +110,8 @@ export class SessionService {
   }
 
   static clearAllSessions(): void {
+    SessionService.preserveDraftBeforeSignOut()
+    MailDetailCache.clear()
     const instances: MailInstance[] = InstanceRegistry.getInstances()
     for (let index = 0; index < instances.length; index++) {
       SecureTokenStore.removeInstanceToken(instances[index].instanceId)
@@ -160,10 +167,13 @@ export class SessionService {
   }
 
   static switchInstance(instanceId: string): boolean {
+    // Persist the old owner's editor before changing any global account state.
+    DraftService.flushActiveEditor()
     const instance: MailInstance | null = InstanceRegistry.find(instanceId)
     if (instance === null || !InstanceRegistry.setActiveInstance(instanceId)) {
       return false
     }
+    MailDetailCache.clear()
     const token: string = SecureTokenStore.getInstanceToken(instanceId)
     AppStorage.set('authToken', token)
     AppStorage.set('authEmail', instance.localEmail)
@@ -187,6 +197,10 @@ export class SessionService {
       return false
     }
     const wasActive: boolean = InstanceRegistry.getActiveInstanceId() === instanceId
+    if (wasActive) {
+      DraftService.flushActiveEditor()
+      MailDetailCache.clear()
+    }
     SecureTokenStore.removeInstanceToken(instanceId)
     const removed: boolean = InstanceRegistry.remove(instanceId)
     if (removed) {
@@ -232,6 +246,15 @@ export class SessionService {
   private static notifySessionChanged(): void {
     const revision: number | undefined = AppStorage.get('sessionRevision') as number | undefined
     AppStorage.set('sessionRevision', revision === undefined ? 1 : revision + 1)
+  }
+
+  private static preserveDraftBeforeSignOut(): void {
+    try {
+      DraftService.flushActiveEditor()
+    } catch (err) {
+      // The editor reports the failed save. An expired/revoked session must still be cleared.
+      console.error('could not flush draft before signing out')
+    }
   }
 
   private static applyActiveSession(): void {

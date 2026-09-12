@@ -19,11 +19,23 @@ const avoidAreaChangeCallback = (data: window.AvoidAreaOptions): void => {
   }
 }
 
+const draftWindowStateCallback = (state: window.WindowStageEventType): void => {
+  if (state === window.WindowStageEventType.INACTIVE) {
+    try {
+      // Attachments are persisted on selection; only pending small editor metadata is flushed here.
+      DraftService.flushActiveEditor()
+    } catch (err) {
+      console.error('could not flush draft before window becomes inactive')
+    }
+  }
+}
+
 export function setAppContext(ctx: common.UIAbilityContext): void {
   appContext = ctx
 }
 
 export default class MailAbility extends UIAbility {
+  private activeWindowStage: window.WindowStage | null = null
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     setAppContext(this.context)
     AppStorage.setOrCreate('safeAreaTopPx', 0)
@@ -32,6 +44,12 @@ export default class MailAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
+    this.activeWindowStage = windowStage
+    try {
+      windowStage.on('windowStageEvent', draftWindowStateCallback)
+    } catch (err) {
+      console.error('register draft window listener failed')
+    }
     AuthService.initialize(this.context)
     SystemSettingsService.initialize(this.context)
     DraftService.initialize(this.context)
@@ -92,6 +110,14 @@ export default class MailAbility extends UIAbility {
   }
 
   onWindowStageDestroy(): void {
+    if (this.activeWindowStage !== null) {
+      try {
+        this.activeWindowStage.off('windowStageEvent', draftWindowStateCallback)
+      } catch (err) {
+        console.error('remove draft window listener failed')
+      }
+      this.activeWindowStage = null
+    }
     if (mainWindow !== null) {
       try {
         mainWindow.off('avoidAreaChange', avoidAreaChangeCallback)

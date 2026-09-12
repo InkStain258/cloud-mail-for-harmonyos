@@ -1,0 +1,6 @@
+{
+  "string": [
+    { "name": "mail_source_changed", "value": "账号或服务已切换，请重新打开邮件" },
+    { "name": "account_stats_unavailable", "value": "未获取" }
+  ]
+}

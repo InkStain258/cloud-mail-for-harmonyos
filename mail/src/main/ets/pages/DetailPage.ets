@@ -2,6 +2,10 @@
 import { ApiException } from '../common/HttpClient'
 import { MailDetailParams, MailItem } from '../common/MailModels'
 import { MailService } from '../common/MailService'
+import { SessionService } from '../common/SessionService'
+import { MailResourceUrl } from '../common/MailResourceUrl'
+import { NativeCapabilities } from '../common/NativeCapabilities'
+import { VerificationCodeCard } from '../components/VerificationCodeCard'
 import { SettingsApi, WebsiteConfig } from '../api/SettingsApi'
 import { ComposeParams } from './ComposePage'
 import { LengthMetrics, PromptAction } from "@kit.ArkUI"
@@ -26,6 +30,16 @@ export struct DetailPageContent {
   private toast: PromptAction = this.getUIContext().getPromptAction()
   private webController: webview.WebviewController = new webview.WebviewController()
   private isWebAttached: boolean = false
+  private pageInstanceId: string = ''
+  private pageOwnerEmail: string = ''
+  private pageApiBaseUrl: string = ''
+  private pageActive: boolean = false
+  private downloading: boolean = false
+  @State actionInFlight: boolean = false
+  @State detailLoading: boolean = false
+  @State detailError: string = ''
+  private detailGeneration: number = 0
+  private pageSessionScope: string = ''
 
   private replyAction: ActionBarButton = new ActionBarButton({
     baseIcon: $r('sys.symbol.arrowshape_turn_up_left'),
@@ -61,24 +75,82 @@ export struct DetailPageContent {
 
   aboutToAppear(): void {
     this.pathStack = AppStorage.get("appPathStack") as NavPathStack
-    this.mediaBaseUrl = this.getAttachmentBaseUrl()
+    this.pageActive = true
     if (this.emailData.emailData !== undefined) {
       this.email = this.emailData.emailData
       this.emailList = this.emailData.emailList.slice()
       this.currentIndex = this.emailData.currentIndex
       this.isStarred = this.email.starred
     }
+    this.pageInstanceId = this.email.instanceId || SessionService.getActiveInstanceId()
+    this.pageOwnerEmail = this.email.ownerEmail || ((AppStorage.get('authEmail') as string) || '')
+    this.pageApiBaseUrl = this.email.apiBaseUrl || SessionService.getApiBaseUrl()
+    this.pageSessionScope = NativeCapabilities.sessionKey()
+    this.mediaBaseUrl = this.getAttachmentBaseUrl()
     this.refreshMediaBaseUrl()
+    this.loadSelectedDetail()
+  }
+
+  aboutToDisappear(): void {
+    this.pageActive = false
+    this.detailGeneration++
+    this.isWebAttached = false
+  }
+
+  private isOriginalSession(): boolean {
+    return this.pageActive && this.pageSessionScope === NativeCapabilities.sessionKey() &&
+      this.pageInstanceId === SessionService.getActiveInstanceId() &&
+      this.pageOwnerEmail === ((AppStorage.get('authEmail') as string) || '') &&
+      this.pageApiBaseUrl === SessionService.getApiBaseUrl()
+  }
+
+  private requireOriginalSession(): boolean {
+    if (this.isOriginalSession()) { return true }
+    this.showToast(this.getUIContext().getHostContext()!.resourceManager.getStringSync($r('app.string.mail_source_changed').id))
+    return false
+  }
+
+  private async loadSelectedDetail(): Promise<void> {
+    const generation: number = ++this.detailGeneration
+    this.detailError = ''
+    this.detailLoading = !this.email.detailLoaded
+    this.loadMailContent()
+    if (!this.detailLoading) { return }
+    const target: MailItem = this.email.copy()
+    try {
+      const detail: MailItem = await MailService.loadDetail(target)
+      if (generation !== this.detailGeneration || !this.isOriginalSession() || this.email.id !== target.id) { return }
+      this.email = detail
+      this.isStarred = detail.starred
+      this.emailList = this.emailList.map((item: MailItem) => item.id === detail.id ? detail.copy() : item)
+      this.loadMailContent()
+    } catch (err) {
+      if (generation === this.detailGeneration && this.isOriginalSession()) {
+        this.detailError = err instanceof ApiException ? err.message :
+          this.getUIContext().getHostContext()!.resourceManager.getStringSync($r('app.string.mail_detail_retry').id)
+      }
+    } finally {
+      if (generation === this.detailGeneration && this.isOriginalSession()) { this.detailLoading = false }
+    }
+  }
+
+  private requireCompleteDetail(): boolean {
+    if (!this.requireOriginalSession()) { return false }
+    if (this.email.detailLoaded) { return true }
+    this.showToast(this.getUIContext().getHostContext()!.resourceManager.getStringSync($r('app.string.mail_detail_not_ready').id))
+    return false
   }
 
   private async refreshMediaBaseUrl(): Promise<void> {
+    if (!this.isOriginalSession()) { return }
     try {
       const config: WebsiteConfig = await SettingsApi.getWebsiteConfig()
+      if (!this.isOriginalSession()) { return }
       this.mediaBaseUrl = this.normalizeMediaBaseUrl(config.r2Domain)
     } catch (err) {
       this.mediaBaseUrl = this.getAttachmentBaseUrl()
     }
-    this.loadMailContent()
+    if (this.isOriginalSession()) { this.loadMailContent() }
   }
 
   private loadMailContent(): void {
@@ -93,6 +165,7 @@ export struct DetailPageContent {
   }
 
   private buildMailDocument(): string {
+    if (!this.email.detailLoaded) { return '<html><body></body></html>' }
     const head: string = '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0" ' +
       'charset="utf-8"><style>html,body{height:auto!important;min-height:1px!important;margin:0;padding:0;' +
       'background:transparent;color:CanvasText;color-scheme:light dark;overflow-wrap:anywhere;}' +
@@ -111,17 +184,7 @@ export struct DetailPageContent {
   }
 
   private normalizeMediaBaseUrl(domain: string): string {
-    let result: string = domain.trim()
-    if (result === '') {
-      return this.getAttachmentBaseUrl()
-    }
-    if (result.indexOf('http://') !== 0 && result.indexOf('https://') !== 0) {
-      result = 'https://' + result
-    }
-    if (result.lastIndexOf('/') !== result.length - 1) {
-      result += '/'
-    }
-    return result
+    return MailResourceUrl.mediaBase(domain, this.pageApiBaseUrl)
   }
 
   private isHtmlMail(): boolean {
@@ -191,6 +254,22 @@ export struct DetailPageContent {
 
           Divider().strokeWidth(0.5).color($r("app.color.divider"))
 
+          if (this.email.verificationCode !== '') {
+            VerificationCodeCard({ code: this.email.verificationCode })
+              .margin({ top: 12, bottom: 12 })
+          }
+          if (this.detailLoading) {
+            Row({ space: 8 }) {
+              LoadingProgress().width(24).height(24).color($r('app.color.primary'))
+              Text($r('app.string.mail_detail_loading')).fontSize(14).fontColor($r('app.color.text_secondary'))
+            }.width('100%').padding({ top: 20, bottom: 20 }).justifyContent(FlexAlign.Center)
+          } else if (this.detailError !== '') {
+            Column({ space: 12 }) {
+              Text(this.detailError).fontSize(14).fontColor($r('app.color.text_secondary'))
+              Button($r('app.string.mail_detail_retry')).onClick(() => { this.loadSelectedDetail() })
+            }.width('100%').padding(20)
+          }
+
           Web({ src: 'about:blank', controller: this.webController, renderMode: RenderMode.SYNC_RENDER })
             .width('100%')
             .layoutMode(WebLayoutMode.FIT_CONTENT)
@@ -258,8 +337,8 @@ export struct DetailPageContent {
         menu: {
           maxCount: 2,
           value: [
-            { content: { label: "上一封", icon: $r("sys.symbol.chevron_up"), isEnabled: this.currentIndex > 0, action: () => { this.prevEmail() } } },
-            { content: { label: "下一封", icon: $r("sys.symbol.chevron_down"), isEnabled: this.currentIndex < this.emailList.length - 1, action: () => { this.nextEmail() } } }
+            { content: { label: "上一封", icon: $r("sys.symbol.chevron_up"), isEnabled: !this.actionInFlight && this.currentIndex > 0, action: () => { this.prevEmail() } } },
+            { content: { label: "下一封", icon: $r("sys.symbol.chevron_down"), isEnabled: !this.actionInFlight && this.currentIndex < this.emailList.length - 1, action: () => { this.nextEmail() } } }
           ]
         }
       },
@@ -302,33 +381,39 @@ export struct DetailPageContent {
   }
 
   private prevEmail(): void {
+    if (this.actionInFlight || !this.requireOriginalSession()) { return }
     if (this.currentIndex > 0) {
       this.currentIndex--
       this.email = this.emailList[this.currentIndex]
       this.showDetail = false
       this.isStarred = this.email.starred
-      this.loadMailContent()
+      this.loadSelectedDetail()
       this.scroller.scrollTo({ xOffset: 0, yOffset: 0 })
     }
   }
 
   private nextEmail(): void {
+    if (this.actionInFlight || !this.requireOriginalSession()) { return }
     if (this.currentIndex < this.emailList.length - 1) {
       this.currentIndex++
       this.email = this.emailList[this.currentIndex]
       this.showDetail = false
       this.isStarred = this.email.starred
-      this.loadMailContent()
+      this.loadSelectedDetail()
       this.scroller.scrollTo({ xOffset: 0, yOffset: 0 })
     }
   }
 
   private async deleteEmail(): Promise<void> {
+    if (this.actionInFlight || !this.requireCompleteDetail()) { return }
+    this.actionInFlight = true
+    const targetId: number = this.email.id
     try {
-      await MailService.delete(this.email.id)
+      await MailService.delete(targetId)
+      if (!this.isOriginalSession()) { return }
       const remaining: MailItem[] = []
       for (let index = 0; index < this.emailList.length; index++) {
-        if (this.emailList[index].id !== this.email.id) {
+        if (this.emailList[index].id !== targetId) {
           remaining.push(this.emailList[index])
         }
       }
@@ -343,28 +428,32 @@ export struct DetailPageContent {
       this.email = this.emailList[this.currentIndex]
       this.showDetail = false
       this.isStarred = this.email.starred
-      this.loadMailContent()
+      this.loadSelectedDetail()
       this.showToast('邮件已删除')
     } catch (err) {
       this.showRequestError(err)
+    } finally {
+      this.actionInFlight = false
     }
   }
 
   private replyEmail(): void {
-    if (this.pathStack === null) {
+    if (this.pathStack === null || !this.requireCompleteDetail()) {
       return
     }
     const prefix: string = this.email.subject.indexOf('Re:') === 0 ? '' : 'Re: '
     const params: ComposeParams = new ComposeParams(this.email.email, '', '', prefix + this.email.subject, '', 'reply', this.email.id)
+    this.setComposeOrigin(params)
     this.pathStack.pushPathByName('ComposePage', params)
   }
 
   private forwardEmail(): void {
-    if (this.pathStack === null) {
+    if (this.pathStack === null || !this.requireCompleteDetail()) {
       return
     }
     const prefix: string = this.email.subject.indexOf('Fwd:') === 0 ? '' : 'Fwd: '
     const params: ComposeParams = new ComposeParams('', '', '', prefix + this.email.subject, this.email.body, 'forward', this.email.id)
+    this.setComposeOrigin(params)
     this.pathStack.pushPathByName('ComposePage', params)
   }
 
@@ -377,10 +466,14 @@ export struct DetailPageContent {
   }
 
   private async toggleStar(): Promise<void> {
+    if (this.actionInFlight || !this.requireCompleteDetail()) { return }
+    this.actionInFlight = true
+    const target: MailItem = this.email.copy()
     const nextStarred: boolean = !this.isStarred
     try {
-      await MailService.setStar(this.email.id, nextStarred)
-      const nextEmail: MailItem = this.email.copy()
+      await MailService.setStar(target.id, nextStarred)
+      if (!this.isOriginalSession()) { return }
+      const nextEmail: MailItem = target
       nextEmail.starred = nextStarred
       this.email = nextEmail
       const updatedList: MailItem[] = []
@@ -396,6 +489,8 @@ export struct DetailPageContent {
       this.showToast(nextStarred ? '已加入星标' : '已取消星标')
     } catch (err) {
       this.showRequestError(err)
+    } finally {
+      this.actionInFlight = false
     }
   }
 
@@ -408,11 +503,13 @@ export struct DetailPageContent {
   }
 
   private async downloadAttachment(index: number, filename: string): Promise<void> {
+    if (this.downloading || !this.requireOriginalSession()) { return }
     if (index >= this.email.attachmentKeys.length || this.email.attachmentKeys[index] === '') {
       this.showToast('附件地址无效')
       return
     }
     const request: http.HttpRequest = http.createHttp()
+    this.downloading = true
     try {
       const response: http.HttpResponse = await request.request(this.getAttachmentUrl(this.email.attachmentKeys[index]), {
         method: http.RequestMethod.GET,
@@ -421,6 +518,7 @@ export struct DetailPageContent {
         connectTimeout: 10000,
         readTimeout: 30000
       })
+      if (!this.isOriginalSession()) { return }
       if (response.responseCode < 200 || response.responseCode >= 300) {
         this.showToast('下载附件失败')
         return
@@ -431,7 +529,7 @@ export struct DetailPageContent {
       options.newFileNames = [filename]
       const documentPicker: picker.DocumentViewPicker = new picker.DocumentViewPicker(context)
       const destinations: string[] = await documentPicker.save(options)
-      if (destinations.length === 0) {
+      if (destinations.length === 0 || !this.isOriginalSession()) {
         return
       }
       const file: fileIo.File = fileIo.openSync(destinations[0], fileIo.OpenMode.WRITE_ONLY | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC)
@@ -444,15 +542,22 @@ export struct DetailPageContent {
     } catch (err) {
       this.showToast('下载附件失败，请重试')
     } finally {
+      this.downloading = false
       request.destroy()
     }
   }
 
   private getAttachmentUrl(key: string): string {
-    return this.getAttachmentBaseUrl() + key
+    return MailResourceUrl.attachmentUrl(this.pageApiBaseUrl, key)
   }
 
   private getAttachmentBaseUrl(): string {
-    return Constants.API_URL + '/oss/'
+    return MailResourceUrl.attachmentBase(this.pageApiBaseUrl)
+  }
+
+  private setComposeOrigin(params: ComposeParams): void {
+    params.instanceId = this.pageInstanceId
+    params.ownerEmail = this.pageOwnerEmail
+    params.senderAccountId = this.email.accountId
   }
 }

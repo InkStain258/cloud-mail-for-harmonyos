@@ -15,6 +15,11 @@
   accountId: number = 0
   type: number = 0
   starred: boolean = false
+  instanceId: string = ''
+  apiBaseUrl: string = ''
+  ownerEmail: string = ''
+  verificationCode: string = ''
+  detailLoaded: boolean = true
 
   copy(): MailItem {
     const item: MailItem = new MailItem()
@@ -34,6 +39,11 @@
     item.accountId = this.accountId
     item.type = this.type
     item.starred = this.starred
+    item.instanceId = this.instanceId
+    item.apiBaseUrl = this.apiBaseUrl
+    item.ownerEmail = this.ownerEmail
+    item.verificationCode = this.verificationCode
+    item.detailLoaded = this.detailLoaded
     return item
   }
 }

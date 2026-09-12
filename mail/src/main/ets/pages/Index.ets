@@ -230,7 +230,10 @@ struct Index {
     .titleBar({
       content: {
         title: { mainTitle: this.getCurrentTitle() },
-        bottomBuilder: { builder: (): void => this.TitleBottomBuilder() },
+        // Remove the title-bar extension itself on other tabs, not only its visible search content.
+        bottomBuilder: this.currentTab === 0 ? {
+          builder: (): void => this.TitleBottomBuilder()
+        } : undefined,
         menu: {
           maxCount: this.currentTab < 4 ? 1 : 0,
           value: this.currentTab < 4 ? [{

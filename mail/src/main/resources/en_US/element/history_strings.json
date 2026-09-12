@@ -1,0 +1,17 @@
+{
+  "string": [
+    { "name": "mail_history_scope", "value": "Searched %d messages (sender, recipient and subject)" },
+    { "name": "mail_history_partial_empty", "value": "No matches in the searched messages. You can search older mail." },
+    { "name": "mail_history_complete_empty", "value": "No matching sender, recipient or subject in mail history" },
+    { "name": "mail_history_continue", "value": "Search older mail" },
+    { "name": "mail_history_searching", "value": "Searching older mail…" },
+    { "name": "mail_history_cancel", "value": "Stop search" },
+    { "name": "mail_history_finished", "value": "All mail history searched" },
+    { "name": "mail_history_stalled", "value": "The service returned no older mail. Search may be incomplete; pull to refresh and retry." },
+    { "name": "mail_history_load_more", "value": "Load older mail" },
+    { "name": "mail_history_loading_more", "value": "Loading older mail…" },
+    { "name": "mail_history_load_failed", "value": "Could not load mail. Please retry." },
+    { "name": "mail_history_retry", "value": "Retry" },
+    { "name": "mail_history_all_loaded", "value": "All mail loaded" }
+  ]
+}

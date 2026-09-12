@@ -1,5 +1,6 @@
 ﻿import Constants from '../common/Constants'
-import { DraftService, MailDraft } from '../common/DraftService'
+import { DraftOwner, DraftService, MailDraft } from '../common/DraftService'
+import { DateTimeUtils } from '../common/DateTimeUtils'
 import { DraftListDataSource } from '../common/DraftListDataSource'
 import { EmptyState } from '../components/EmptyState'
 import { ComposeParams } from './ComposePage'
@@ -11,7 +12,10 @@ export struct DraftsPage {
   private dataSource: DraftListDataSource = new DraftListDataSource()
   private pathStack: NavPathStack = AppStorage.get('appPathStack') as NavPathStack
   @StorageLink('draftRevision') @Watch('onDraftRevision') draftRevision: number = 0
+  @StorageLink('sessionRevision') @Watch('onDraftRevision') sessionRevision: number = 0
+  @StorageLink('draftStorageError') draftStorageError: boolean = false
   @State draftList: MailDraft[] = []
+  @State unassignedCount: number = 0
 
   aboutToAppear(): void {
     this.refreshDrafts()
@@ -23,23 +27,57 @@ export struct DraftsPage {
 
   private refreshDrafts(): void {
     this.draftList = DraftService.getDrafts()
+    this.unassignedCount = DraftService.getUnassignedCount()
     this.dataSource.setData(this.draftList)
   }
 
   private deleteDraft(id: number): void {
-    DraftService.deleteDraft(id)
-    this.dataSource.removeItem(id)
+    try {
+      DraftService.deleteDraft(id)
+      this.refreshDrafts()
+    } catch (err) {
+      this.getUIContext().getPromptAction().openToast({ message: this.resourceText($r('app.string.draft_delete_failed')) })
+    }
   }
 
   private editDraft(item: MailDraft): void {
     const params: ComposeParams = new ComposeParams(item.toEmail, item.ccEmail, item.bccEmail, item.subject, item.content,
-      '', 0, item.id)
+      item.sendType, item.emailId, item.id)
+    params.instanceId = item.instanceId
+    params.ownerEmail = item.ownerEmail
+    params.senderAccountId = item.senderAccountId
     this.pathStack.pushPathByName('ComposePage', params)
+  }
+
+  private resourceText(resource: Resource): string {
+    const context: Context = this.getUIContext().getHostContext() as Context
+    return context.resourceManager.getStringSync(resource.id)
+  }
+
+  private async importLegacyDrafts(): Promise<void> {
+    const owner: DraftOwner = DraftService.captureOwner()
+    try {
+      const result = await this.getUIContext().getPromptAction().showDialog({
+        title: $r('app.string.draft_import_title'),
+        message: $r('app.string.draft_import_message', owner.email,
+          (AppStorage.get('activeInstanceName') as string | undefined) || owner.instanceId),
+        buttons: [
+          { text: $r('app.string.draft_cancel'), color: $r('app.color.text_secondary') },
+          { text: $r('app.string.draft_import_confirm'), color: $r('app.color.primary') }
+        ]
+      })
+      if (result.index !== 1) { return }
+      DraftService.importUnassigned(owner)
+    } catch (err) {
+      this.getUIContext().getPromptAction().openToast({ message: this.resourceText($r('app.string.draft_import_failed')) })
+    } finally {
+      this.refreshDrafts()
+    }
   }
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      if (this.draftList.length === 0) {
+      if (this.draftList.length === 0 && this.unassignedCount === 0 && !this.draftStorageError) {
         Column() {
           EmptyState({ icon: $r('sys.symbol.doc'), message: '暂无草稿' })
         }
@@ -50,6 +88,32 @@ export struct DraftsPage {
         List({ scroller: this.scroller }) {
           ListItem() {
             Column().height(this.topContentInset)
+          }
+          if (this.draftStorageError) {
+            ListItem() {
+              Text($r('app.string.draft_storage_unavailable'))
+                .fontSize(Constants.FONT_SIZE_SMALL)
+                .fontColor($r('app.color.danger'))
+                .padding(Constants.PADDING_INNER)
+            }
+          }
+          if (this.unassignedCount > 0) {
+            ListItem() {
+              Column({ space: 8 }) {
+                Text($r('app.string.draft_legacy_notice', this.unassignedCount))
+                  .fontSize(Constants.FONT_SIZE_SMALL)
+                  .fontColor($r('app.color.text_secondary'))
+                Button($r('app.string.draft_import_title'))
+                  .enabled(!this.draftStorageError)
+                  .onClick(() => { this.importLegacyDrafts() })
+              }
+              .width('100%')
+              .alignItems(HorizontalAlign.Start)
+              .padding(Constants.PADDING_INNER)
+              .backgroundColor($r('app.color.card'))
+              .borderRadius(Constants.RADIUS_CARD)
+              .margin({ top: 4, bottom: 8 })
+            }
           }
           LazyForEach(this.dataSource, (item: MailDraft) => {
             ListItem() {
@@ -63,7 +127,7 @@ export struct DraftsPage {
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                       .layoutWeight(1)
-                    Text(item.time)
+                    Text(DateTimeUtils.formatUtcDateTime(item.time))
                       .fontSize(12)
                       .fontColor($r('app.color.text_tertiary'))
                   }

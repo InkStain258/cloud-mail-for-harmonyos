@@ -1,0 +1,11 @@
+{
+  "string": [
+    { "name": "verification_code_title", "value": "验证码" },
+    { "name": "verification_code_copy", "value": "复制" },
+    { "name": "verification_code_copied", "value": "验证码已复制" },
+    { "name": "verification_code_copy_failed", "value": "复制失败，请重试" },
+    { "name": "mail_detail_loading", "value": "正在加载完整邮件…" },
+    { "name": "mail_detail_retry", "value": "重新加载正文" },
+    { "name": "mail_detail_not_ready", "value": "请等待完整邮件加载后重试" }
+  ]
+}

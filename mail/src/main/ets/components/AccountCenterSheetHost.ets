@@ -15,6 +15,8 @@ import { DateTimeUtils } from '../common/DateTimeUtils'
 import { HuaweiAccountCache } from '../common/HuaweiAccountCache'
 import { PlatformBinding } from '../common/InstanceModels'
 import { InstanceService } from '../common/InstanceService'
+import { InstanceRegistry } from '../common/InstanceRegistry'
+import { SessionService } from '../common/SessionService'
 import { MailStatsStore } from '../common/MailStatsStore'
 import { PlatformSessionService } from '../common/PlatformSessionService'
 
@@ -34,6 +36,9 @@ export struct AccountCenterSheetHost {
   @StorageLink('mailReceiveCount') receiveMailCount: number = 0
   @StorageLink('mailSentCount') sentMailCount: number = 0
   @StorageLink('mailStarCount') starMailCount: number = 0
+  @StorageLink('mailReceiveCountReady') receiveMailCountReady: boolean = false
+  @StorageLink('mailSentCountReady') sentMailCountReady: boolean = false
+  @StorageLink('mailStarCountReady') starMailCountReady: boolean = false
   @State identityLoaded: boolean = false
   @State bindingsLoaded: boolean = false
   @State bindingsLoading: boolean = false
@@ -62,6 +67,13 @@ export struct AccountCenterSheetHost {
     this.loadBoundMailboxes()
   }
 
+  aboutToDisappear(): void {
+    this.identityRequestSequence++
+    this.identityRequestInFlight = false
+    this.bindingsRequestSequence++
+    this.bindingsRequestInFlight = false
+  }
+
   private onSheetVisibilityChanged(): void {
     if (this.isShown) {
       this.loadHuaweiIdentity(true)
@@ -70,6 +82,7 @@ export struct AccountCenterSheetHost {
   }
 
   private onSessionRevisionChanged(): void {
+    this.userCreateTime = ''
     this.loadHuaweiIdentity(true)
   }
 
@@ -143,13 +156,13 @@ export struct AccountCenterSheetHost {
                 this.AccountStatCard('注册时间', this.getRegistrationTime(), $r('sys.symbol.clock'))
               }
               GridItem() {
-                this.AccountStatCard('收到邮件', this.receiveMailCount.toString(), $r('sys.symbol.envelope'))
+                this.AccountStatCard('收到邮件', this.getMailCountText(this.receiveMailCount, this.receiveMailCountReady), $r('sys.symbol.envelope'))
               }
               GridItem() {
-                this.AccountStatCard('发送邮件', this.sentMailCount.toString(), $r('sys.symbol.paperplane'))
+                this.AccountStatCard('发送邮件', this.getMailCountText(this.sentMailCount, this.sentMailCountReady), $r('sys.symbol.paperplane'))
               }
               GridItem() {
-                this.AccountStatCard('星标邮件', this.starMailCount.toString(), $r('sys.symbol.star'))
+                this.AccountStatCard('星标邮件', this.getMailCountText(this.starMailCount, this.starMailCountReady), $r('sys.symbol.star'))
               }
             }
             .columnsTemplate('1fr 1fr')
@@ -773,11 +786,15 @@ export struct AccountCenterSheetHost {
   private async loadHuaweiIdentity(forceRefresh: boolean = false): Promise<void> {
     const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext
     const ownerEmail: string = InstanceService.getAnchorEmail()
+    const sourceToken: string = InstanceService.getAnchorToken()
+    const requestRevision: number = this.sessionRevision
     this.applyPlatformIdentity()
     const cachedBinding: HuaweiAccountBinding | null = HuaweiAccountCache.load(context, ownerEmail)
     if (cachedBinding !== null) {
       this.applyHuaweiIdentity(cachedBinding, false)
-      MailStatsStore.syncMissing(cachedBinding.receiveCount, cachedBinding.sentCount, cachedBinding.starCount)
+      if (this.canUseAnchorAccountData(cachedBinding.primaryEmail)) {
+        MailStatsStore.syncMissing(cachedBinding.receiveCount, cachedBinding.sentCount, cachedBinding.starCount)
+      }
       this.identityLoaded = true
     }
     if (!forceRefresh && !HuaweiAccountCache.shouldRefresh(ownerEmail)) {
@@ -792,7 +809,8 @@ export struct AccountCenterSheetHost {
     this.identityRequestInFlight = true
     try {
       const binding: HuaweiAccountBinding | null = await HuaweiAccountApi.current()
-      if (requestId !== this.identityRequestSequence || ownerEmail !== InstanceService.getAnchorEmail()) {
+      if (requestId !== this.identityRequestSequence || requestRevision !== this.sessionRevision ||
+        ownerEmail !== InstanceService.getAnchorEmail() || sourceToken !== InstanceService.getAnchorToken()) {
         return
       }
       this.identityLoaded = true
@@ -872,8 +890,8 @@ export struct AccountCenterSheetHost {
     this.huaweiPrimaryEmail = binding.primaryEmail
     this.huaweiUserId = PlatformSessionService.getHuaweiUserId() === '' ?
       binding.huaweiUserId : PlatformSessionService.getHuaweiUserId()
-    this.userCreateTime = binding.userCreateTime
-    if (syncStats) {
+    this.userCreateTime = this.canUseAnchorAccountData(binding.primaryEmail) ? binding.userCreateTime : ''
+    if (syncStats && this.canUseAnchorAccountData(binding.primaryEmail)) {
       MailStatsStore.sync(binding.receiveCount, binding.sentCount, binding.starCount)
     }
     this.notifyIdentityChanged()
@@ -910,7 +928,23 @@ export struct AccountCenterSheetHost {
   }
 
   private getRegistrationTime(): string {
-    return DateTimeUtils.formatUtcDateTime(this.userCreateTime, '暂无')
+    const fallback: string = this.getUnavailableStatText()
+    return this.canUseAnchorAccountData(this.huaweiPrimaryEmail) ?
+      DateTimeUtils.formatUtcDateTime(this.userCreateTime, fallback) : fallback
+  }
+
+  private canUseAnchorAccountData(primaryEmail: string): boolean {
+    return primaryEmail !== '' && SessionService.getActiveInstanceId() === InstanceRegistry.getDefaultInstanceId() &&
+      primaryEmail === ((AppStorage.get('authEmail') as string) || '') &&
+      primaryEmail === InstanceService.getAnchorEmail()
+  }
+
+  private getMailCountText(value: number, ready: boolean): string {
+    return ready && Number.isFinite(value) && value >= 0 ? value.toString() : this.getUnavailableStatText()
+  }
+
+  private getUnavailableStatText(): string {
+    return this.getUIContext().getHostContext()!.resourceManager.getStringSync($r('app.string.account_stats_unavailable').id)
   }
 
   private getInstanceRoleLabel(role: string): string {

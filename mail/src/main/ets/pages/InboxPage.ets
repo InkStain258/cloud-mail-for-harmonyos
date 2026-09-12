@@ -1,7 +1,8 @@
 ﻿import Constants from '../common/Constants'
 import { ApiException } from '../common/HttpClient'
 import { MailDetailParams, MailItem } from '../common/MailModels'
-import { MailPage, MailService } from '../common/MailService'
+import { MailService } from '../common/MailService'
+import { MailHistoryKind, MailHistoryLoader } from '../common/MailHistoryLoader'
 import { MailListDataSource } from '../common/MailListDataSource'
 import { PromptAction } from '@kit.ArkUI'
 import { EmailCard } from '../components/EmailCard'
@@ -11,7 +12,12 @@ export struct InboxPage {
   scroller: Scroller = new Scroller()
   @Prop topContentInset: number = Constants.INBOX_TOP_CONTENT_INSET
   private dataSource: MailListDataSource = new MailListDataSource()
+  private history: MailHistoryLoader = new MailHistoryLoader(MailHistoryKind.Inbox)
+  private operation: number = 0
+  private searchTimer: number = -1
+  private active: boolean = false
   @StorageLink('mailRevision') @Watch('onMailRevision') mailRevision: number = 0
+  @StorageLink('sessionRevision') @Watch('onSessionChanged') sessionRevision: number = 0
   @Link @Watch('onSearchTextUpdated') searchText: string
   @State emailList: MailItem[] = []
   @State isLoading: boolean = false
@@ -19,99 +25,182 @@ export struct InboxPage {
   @State isRefreshing: boolean = false
   @State refreshStatus: RefreshStatus = RefreshStatus.Inactive
   @State hasMore: boolean = true
+  @State isSearching: boolean = false
+  @State searchKeyword: string = ''
+  @State loadFailed: boolean = false
+  @State searchStalled: boolean = false
   @State refreshKey: number = 0
   private pathStack: NavPathStack = AppStorage.get('appPathStack') as NavPathStack
   private toast: PromptAction = this.getUIContext().getPromptAction()
 
   aboutToAppear(): void {
+    this.active = true
+    this.searchKeyword = this.searchText.trim().toLowerCase()
     this.loadEmails()
   }
 
+  aboutToDisappear(): void {
+    this.active = false
+    this.operation++
+    this.history.cancel()
+    if (this.searchTimer >= 0) {
+      clearTimeout(this.searchTimer)
+    }
+  }
+
+  private onSessionChanged(): void {
+    if (this.active) {
+      this.emailList = []
+      this.syncVisibleData()
+      this.loadEmails()
+    }
+  }
+
   private onMailRevision(): void {
-    this.loadEmails(false)
+    if (this.active) {
+      this.loadEmails(false)
+    }
   }
 
   private onSearchTextUpdated(): void {
+    this.cancelSearch()
+    this.searchKeyword = this.searchText.trim().toLowerCase()
     this.syncVisibleData()
+    if (this.searchKeyword !== '' && this.active) {
+      this.searchTimer = setTimeout(() => {
+        this.searchTimer = -1
+        this.loadEmails()
+      }, 350)
+    } else if (this.active) {
+      this.loadEmails()
+    }
   }
 
   private async loadEmails(showLoading: boolean = true, showSuccess: boolean = false): Promise<void> {
+    this.cancelSearch()
+    this.history.reset(this.searchKeyword !== '')
+    this.hasMore = true
+    this.searchStalled = false
+    const operation: number = ++this.operation
+    const scope: string = MailHistoryLoader.sessionKey()
+    this.loadFailed = false
     if (showLoading) {
       this.isLoading = true
     }
     try {
-      const page: MailPage = await MailService.loadInboxPage(0)
-      this.emailList = page.items
-      this.hasMore = this.emailList.length < page.total && page.items.length > 0
-      this.syncVisibleData()
+      const applied: boolean = await this.history.loadNext()
+      if (!applied || !this.isCurrent(operation, scope)) {
+        return
+      }
+      this.syncHistory()
       if (showSuccess) {
         this.showToast('邮件已刷新')
       }
     } catch (err) {
-      this.showRequestError(err)
-    } finally {
-      if (showLoading) {
-        this.isLoading = false
+      if (this.isCurrent(operation, scope)) {
+        this.loadFailed = true
+        this.showRequestError(err)
       }
-      this.isRefreshing = false
-      this.refreshStatus = RefreshStatus.Inactive
+    } finally {
+      if (this.isCurrent(operation, scope)) {
+        this.isLoading = false
+        this.isRefreshing = false
+        this.refreshStatus = RefreshStatus.Inactive
+      }
+    }
+    if (this.isCurrent(operation, scope) && this.searchKeyword !== '' && !this.loadFailed) {
+      this.searchHistory()
     }
   }
 
   private async loadMoreEmails(): Promise<void> {
-    if (this.isLoading || this.isLoadingMore || !this.hasMore || this.searchText.trim() !== '' || this.emailList.length === 0) {
+    if (this.isLoading || this.isLoadingMore || this.isSearching || !this.hasMore || this.searchKeyword !== '') {
       return
     }
+    const operation: number = this.operation
+    const scope: string = MailHistoryLoader.sessionKey()
     this.isLoadingMore = true
+    this.loadFailed = false
     try {
-      const cursor: number = this.emailList[this.emailList.length - 1].id
-      const page: MailPage = await MailService.loadInboxPage(cursor)
-      const appended: MailItem[] = this.removeLoadedItems(page.items)
-      if (appended.length > 0) {
-        const result: MailItem[] = []
-        for (let index = 0; index < this.emailList.length; index++) {
-          result.push(this.emailList[index])
-        }
-        for (let index = 0; index < appended.length; index++) {
-          result.push(appended[index])
-        }
-        this.emailList = result
-        this.dataSource.appendData(appended)
+      if (await this.history.loadNext() && this.isCurrent(operation, scope)) {
+        this.syncHistory()
       }
-      this.hasMore = page.items.length > 0 && this.emailList.length < page.total
     } catch (err) {
-      this.showRequestError(err)
+      if (this.isCurrent(operation, scope)) {
+        this.loadFailed = true
+        this.showRequestError(err)
+      }
     } finally {
-      this.isLoadingMore = false
+      if (this.isCurrent(operation, scope)) {
+        this.isLoadingMore = false
+      }
     }
   }
 
-  private removeLoadedItems(items: MailItem[]): MailItem[] {
-    const result: MailItem[] = []
-    for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-      let exists: boolean = false
-      for (let loadedIndex = 0; loadedIndex < this.emailList.length; loadedIndex++) {
-        if (items[itemIndex].id === this.emailList[loadedIndex].id) {
-          exists = true
+  private async searchHistory(): Promise<void> {
+    if (this.isSearching || this.searchKeyword === '' || !this.active || !this.history.hasMore) {
+      return
+    }
+    const operation: number = this.operation
+    const scope: string = MailHistoryLoader.sessionKey()
+    this.isSearching = true
+    this.loadFailed = false
+    try {
+      // Search a bounded batch. Continuing is explicit, never an unbounded crawl.
+      for (let pageIndex = 0; pageIndex < 3 && this.history.hasMore; pageIndex++) {
+        if (!this.isCurrent(operation, scope) || !await this.history.loadNext()) {
           break
         }
+        this.syncHistory()
       }
-      if (!exists) {
-        result.push(items[itemIndex])
+    } catch (err) {
+      if (this.isCurrent(operation, scope)) {
+        this.loadFailed = true
+        this.showRequestError(err)
+      }
+    } finally {
+      if (this.isCurrent(operation, scope)) {
+        this.isSearching = false
       }
     }
-    return result
+  }
+
+  private cancelSearch(): void {
+    this.operation++
+    this.history.cancel()
+    if (this.searchTimer >= 0) {
+      clearTimeout(this.searchTimer)
+      this.searchTimer = -1
+    }
+    this.isSearching = false
+    this.isLoading = false
+    this.isLoadingMore = false
+    this.isRefreshing = false
+    this.refreshStatus = RefreshStatus.Inactive
+  }
+
+  private isCurrent(operation: number, scope: string): boolean {
+    return this.active && operation === this.operation && scope === MailHistoryLoader.sessionKey()
+  }
+
+  private syncHistory(): void {
+    this.emailList = this.history.items.slice()
+    this.hasMore = this.history.hasMore
+    this.searchStalled = this.history.stalled
+    this.syncVisibleData()
   }
 
   private getFiltered(): MailItem[] {
-    const keyword: string = this.searchText.trim().toLowerCase()
+    const keyword: string = this.searchKeyword
     if (keyword === '') {
       return this.emailList
     }
     return this.emailList.filter((item: MailItem) =>
       item.name.toLowerCase().includes(keyword) ||
       item.email.toLowerCase().includes(keyword) ||
-      item.subject.toLowerCase().includes(keyword)
+      item.toEmail.toLowerCase().includes(keyword) ||
+      item.subject.toLowerCase().includes(keyword) ||
+      (item.detailLoaded && item.body.toLowerCase().includes(keyword))
     )
   }
 
@@ -120,28 +209,34 @@ export struct InboxPage {
   }
 
   private async markAsRead(id: number): Promise<void> {
+    const scope: string = MailHistoryLoader.sessionKey()
     try {
       await MailService.markRead(id)
+      if (!this.active || scope !== MailHistoryLoader.sessionKey()) { return }
       this.replaceUnread(id, false)
     } catch (err) {
-      this.showRequestError(err)
+      if (this.active && scope === MailHistoryLoader.sessionKey()) { this.showRequestError(err) }
     }
   }
 
   private async toggleStar(id: number, starred: boolean): Promise<void> {
+    const scope: string = MailHistoryLoader.sessionKey()
     const nextStarred: boolean = !starred
     try {
       await MailService.setStar(id, nextStarred)
+      if (!this.active || scope !== MailHistoryLoader.sessionKey()) { return }
       this.replaceStarred(id, nextStarred)
       this.showToast(nextStarred ? '已加入星标' : '已取消星标')
     } catch (err) {
-      this.showRequestError(err)
+      if (this.active && scope === MailHistoryLoader.sessionKey()) { this.showRequestError(err) }
     }
   }
 
   private async deleteEmail(id: number): Promise<void> {
+    const scope: string = MailHistoryLoader.sessionKey()
     try {
       await MailService.delete(id)
+      if (!this.active || scope !== MailHistoryLoader.sessionKey()) { return }
       const result: MailItem[] = []
       for (let index = 0; index < this.emailList.length; index++) {
         if (this.emailList[index].id !== id) {
@@ -149,10 +244,11 @@ export struct InboxPage {
         }
       }
       this.emailList = result
+      this.history.replaceItems(result)
       this.syncVisibleData()
       this.showToast('邮件已删除')
     } catch (err) {
-      this.showRequestError(err)
+      if (this.active && scope === MailHistoryLoader.sessionKey()) { this.showRequestError(err) }
     }
   }
 
@@ -176,6 +272,7 @@ export struct InboxPage {
       result.push(next)
     }
     this.emailList = result
+    this.history.replaceItems(result)
     this.syncVisibleData()
     this.refreshKey++
   }
@@ -191,6 +288,7 @@ export struct InboxPage {
       result.push(next)
     }
     this.emailList = result
+    this.history.replaceItems(result)
     this.syncVisibleData()
     this.refreshKey++
   }
@@ -209,6 +307,67 @@ export struct InboxPage {
     } catch (err) {
       console.error('openToast failed')
     }
+  }
+
+  @Builder
+  private HistoryFooter() {
+    Column({ space: 8 }) {
+      if (this.searchKeyword !== '') {
+        Text($r('app.string.mail_history_scope', this.emailList.length))
+          .fontSize(Constants.FONT_SIZE_SMALL)
+          .fontColor($r('app.color.text_secondary'))
+          .textAlign(TextAlign.Center)
+        if (this.isSearching) {
+          Row({ space: 8 }) {
+            LoadingProgress().width(20).height(20).color($r('app.color.primary'))
+            Text($r('app.string.mail_history_searching'))
+              .fontSize(Constants.FONT_SIZE_SMALL)
+              .fontColor($r('app.color.text_secondary'))
+          }
+          Button($r('app.string.mail_history_cancel'))
+            .onClick(() => { this.cancelSearch() })
+        } else if (this.searchStalled) {
+          Text($r('app.string.mail_history_stalled'))
+            .fontSize(Constants.FONT_SIZE_SMALL)
+            .fontColor($r('app.color.text_secondary'))
+        } else if (this.hasMore) {
+          if (this.loadFailed) {
+            Text($r('app.string.mail_history_load_failed'))
+              .fontSize(Constants.FONT_SIZE_SMALL)
+              .fontColor($r('app.color.text_secondary'))
+          }
+          Button($r('app.string.mail_history_continue'))
+            .onClick(() => { this.searchHistory() })
+        } else {
+          Text($r('app.string.mail_history_finished'))
+            .fontSize(Constants.FONT_SIZE_SMALL)
+            .fontColor($r('app.color.text_secondary'))
+        }
+      } else if (this.isLoadingMore) {
+        LoadingProgress().width(24).height(24).color($r('app.color.primary'))
+      } else if (this.searchStalled) {
+        Text($r('app.string.mail_history_stalled'))
+          .fontSize(Constants.FONT_SIZE_SMALL)
+          .fontColor($r('app.color.text_secondary'))
+      } else if (this.loadFailed) {
+        Text($r('app.string.mail_history_load_failed'))
+          .fontSize(Constants.FONT_SIZE_SMALL)
+          .fontColor($r('app.color.text_secondary'))
+        Button($r('app.string.mail_history_retry'))
+          .onClick(() => {
+            if (this.emailList.length === 0) {
+              this.loadEmails()
+            } else {
+              this.loadMoreEmails()
+            }
+          })
+      } else if (this.hasMore) {
+        Button($r('app.string.mail_history_load_more'))
+          .onClick(() => { this.loadMoreEmails() })
+      }
+    }
+    .width('100%')
+    .padding({ top: 12, bottom: Constants.PADDING_TAB_CONTENT_BOTTOM })
   }
 
   @Builder
@@ -258,15 +417,19 @@ export struct InboxPage {
                 SymbolGlyph($r('sys.symbol.magnifyingglass'))
                   .fontSize(48)
                   .fontColor([$r('app.color.text_tertiary')])
-                Text(this.searchText !== '' ? '未找到相关邮件' : '暂无邮件')
+                Text(this.searchKeyword !== '' ? (this.hasMore || this.searchStalled || this.loadFailed ?
+                  $r('app.string.mail_history_partial_empty') : $r('app.string.mail_history_complete_empty')) :
+                  (this.loadFailed ? $r('app.string.mail_history_load_failed') : '暂无邮件'))
                   .fontSize(Constants.FONT_SIZE_SUBTITLE)
                   .fontColor($r('app.color.text_tertiary'))
+                  .textAlign(TextAlign.Center)
                   .margin({ top: 12 })
               }
               .width('100%')
-              .height(420)
+              .height(200)
               .justifyContent(FlexAlign.Center)
             }
+            ListItem() { this.HistoryFooter() }
           }
           .width('100%')
           .height('100%')
@@ -293,6 +456,7 @@ export struct InboxPage {
                 subject: item.subject,
                 time: item.time,
                 unread: item.unread,
+                verificationCode: item.verificationCode,
                 onCardClick: () => { this.openDetail(item, index) }
               })
             }
@@ -305,18 +469,7 @@ export struct InboxPage {
             })
           }, (item: MailItem): string => item.id.toString() + '_' + item.unread.toString() + '_' + item.starred.toString() + '_' + this.refreshKey.toString())
           ListItem() {
-            Column() {
-              if (this.isLoadingMore) {
-                LoadingProgress()
-                  .width(24)
-                  .height(24)
-                  .color($r('app.color.primary'))
-                  .margin({ top: 12 })
-              }
-            }
-            .width('100%')
-            .height(Constants.PADDING_TAB_CONTENT_BOTTOM)
-            .alignItems(HorizontalAlign.Center)
+            this.HistoryFooter()
           }
         }
         .width('100%')
@@ -324,7 +477,9 @@ export struct InboxPage {
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
         .padding({ left: Constants.PADDING_EDGE, right: Constants.PADDING_EDGE })
-        .onReachEnd(() => { this.loadMoreEmails() })
+        .onReachEnd(() => {
+          if (!this.loadFailed) { this.loadMoreEmails() }
+        })
         }
         .width('100%')
         .height('100%')

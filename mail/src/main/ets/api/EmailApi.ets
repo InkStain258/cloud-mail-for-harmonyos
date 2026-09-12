@@ -18,14 +18,15 @@ class EmailIdRequest {
 
 export class EmailApi {
   static async list(accountId: number, allReceive: number, emailId: number, timeSort: number, size: number,
-    type: number): Promise<ApiResponse> {
+    type: number, full: boolean = true): Promise<ApiResponse> {
     const path: string = HttpClient.appendQuery('/email/list', [
       new QueryParameter('accountId', accountId.toString()),
       new QueryParameter('allReceive', allReceive.toString()),
       new QueryParameter('emailId', emailId.toString()),
       new QueryParameter('timeSort', timeSort.toString()),
       new QueryParameter('size', size.toString()),
-      new QueryParameter('type', type.toString())
+      new QueryParameter('type', type.toString()),
+      new QueryParameter('full', full ? '1' : '0')
     ])
     return HttpClient.get(path)
   }
@@ -59,15 +60,20 @@ export class EmailApi {
     return HttpClient.delete(path)
   }
 
-  static async listStarred(emailId: number, size: number): Promise<ApiResponse> {
+  static async listStarred(emailId: number, size: number, full: boolean = true): Promise<ApiResponse> {
     const path: string = HttpClient.appendQuery('/star/list', [
       new QueryParameter('emailId', emailId.toString()),
-      new QueryParameter('size', size.toString())
+      new QueryParameter('size', size.toString()),
+      new QueryParameter('full', full ? '1' : '0')
     ])
     return HttpClient.get(path)
   }
 
   static async send(jsonForm: string): Promise<ApiResponse> {
     return HttpClient.post('/email/send', jsonForm)
+  }
+
+  static async detail(emailId: number): Promise<ApiResponse> {
+    return HttpClient.get(HttpClient.appendQuery('/native/email/detail', [new QueryParameter('emailId', emailId.toString())]))
   }
 }
