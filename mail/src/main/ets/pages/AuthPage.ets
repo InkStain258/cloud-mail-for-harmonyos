@@ -10,6 +10,7 @@ import Constants from '../common/Constants'
 import { AuthResult, AuthService, HuaweiAuthResult } from '../common/AuthService'
 
 enum LoginStage {
+  EMAIL_LOGIN,
   HUAWEI_LOGIN,
   CHOOSE_ACTION,
   BIND_EXISTING,
@@ -29,7 +30,7 @@ enum HuaweiLoginErrorCode {
 
 @Component
 export struct AuthPage {
-  @State stage: LoginStage = LoginStage.HUAWEI_LOGIN
+  @State stage: LoginStage = LoginStage.EMAIL_LOGIN
   @State agreementAccepted: boolean = false
   @State email: string = ''
   @State password: string = ''
@@ -85,7 +86,9 @@ export struct AuthPage {
         Scroll() {
           Column() {
             this.BrandHeader()
-            if (this.stage === LoginStage.CHOOSE_ACTION) {
+            if (this.stage === LoginStage.EMAIL_LOGIN) {
+              this.EmailLoginCard()
+            } else if (this.stage === LoginStage.CHOOSE_ACTION) {
               this.ActionChoiceCard()
             } else if (this.stage === LoginStage.BIND_EXISTING) {
               this.BindExistingCard()
@@ -247,6 +250,57 @@ export struct AuthPage {
   }
 
   @Builder
+  private EmailLoginCard() {
+    Column({ space: Constants.GAP_MEDIUM }) {
+      Text('登录主邮箱')
+        .fontSize(Constants.FONT_SIZE_TITLE)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+        .width('100%')
+
+      this.EmailInput()
+
+      TextInput({ placeholder: '邮箱密码', text: this.password })
+        .type(InputType.Password)
+        .showPasswordIcon(true)
+        .height(48)
+        .fontSize(Constants.FONT_SIZE_COMMON)
+        .fontColor($r('app.color.text_primary'))
+        .placeholderColor($r('app.color.text_tertiary'))
+        .backgroundColor($r('app.color.background'))
+        .border({ width: 0.5, color: $r('app.color.divider') })
+        .borderRadius(Constants.RADIUS_SMALL)
+        .padding({ left: Constants.PADDING_INNER, right: Constants.PADDING_INNER })
+        .onChange((value: string) => { this.password = value })
+
+      this.PrimaryActionButton('登录', () => { this.loginWithEmail() })
+
+      Button('没有主邮箱？点我注册', { type: ButtonType.Normal, stateEffect: true })
+        .fontSize(Constants.FONT_SIZE_COMMON)
+        .fontColor($r('app.color.text_link'))
+        .backgroundColor(Color.Transparent)
+        .enabled(this.registrationEnabled)
+        .onClick(() => {
+          this.password = ''
+          this.stage = LoginStage.REGISTER_NEW
+        })
+
+      if (!this.registrationEnabled) {
+        Text('当前站点未开放新邮箱注册。')
+          .fontSize(Constants.FONT_SIZE_SMALL)
+          .fontColor($r('app.color.text_tertiary'))
+          .width('100%')
+          .textAlign(TextAlign.Center)
+      }
+    }
+    .width('100%')
+    .padding(Constants.PADDING_EDGE)
+    .backgroundColor($r('app.color.card'))
+    .borderRadius(Constants.RADIUS_CARD)
+    .shadow(Constants.SHADOW_CARD)
+  }
+
+  @Builder
   private ActionChoiceCard() {
     Column({ space: Constants.GAP_MEDIUM }) {
       Text('设置你的主邮箱')
@@ -342,6 +396,19 @@ export struct AuthPage {
 
       this.EmailInput()
 
+      TextInput({ placeholder: '设置登录密码（至少 6 位）', text: this.password })
+        .type(InputType.Password)
+        .showPasswordIcon(true)
+        .height(48)
+        .fontSize(Constants.FONT_SIZE_COMMON)
+        .fontColor($r('app.color.text_primary'))
+        .placeholderColor($r('app.color.text_tertiary'))
+        .backgroundColor($r('app.color.background'))
+        .border({ width: 0.5, color: $r('app.color.divider') })
+        .borderRadius(Constants.RADIUS_SMALL)
+        .padding({ left: Constants.PADDING_INNER, right: Constants.PADDING_INNER })
+        .onChange((value: string) => { this.password = value })
+
       if (this.registrationCodeRequired) {
         TextInput({ placeholder: '注册码', text: this.registerCode })
           .height(48)
@@ -355,12 +422,12 @@ export struct AuthPage {
           .onChange((value: string) => { this.registerCode = value })
       }
 
-      Text('该邮箱将与当前华为账号绑定，应用内不再设置单独登录密码。')
+      Text('注册后使用「邮箱 + 密码」登录，密码至少 6 位。')
         .fontSize(Constants.FONT_SIZE_SMALL)
         .fontColor($r('app.color.text_secondary'))
         .width('100%')
 
-      this.PrimaryActionButton('注册并绑定', () => { this.registerNewMailbox() })
+      this.PrimaryActionButton('注册', () => { this.registerNewMailbox() })
       this.BackButton()
     }
     .width('100%')
@@ -414,7 +481,7 @@ export struct AuthPage {
       .onClick(() => {
         this.password = ''
         this.registerCode = ''
-        this.stage = LoginStage.CHOOSE_ACTION
+        this.stage = LoginStage.EMAIL_LOGIN
       })
   }
 
@@ -541,6 +608,27 @@ export struct AuthPage {
     })
   }
 
+  private async loginWithEmail(): Promise<void> {
+    if (this.isSubmitting) {
+      return
+    }
+    if (!this.validateEmail()) {
+      return
+    }
+    if (this.password === '') {
+      this.showToast('请输入邮箱密码')
+      return
+    }
+    this.isSubmitting = true
+    const result: AuthResult = await AuthService.login(this.getFullEmail(), this.password)
+    this.isSubmitting = false
+    if (!result.success) {
+      this.showToast(result.message)
+      return
+    }
+    this.finishAuthentication()
+  }
+
   private async bindExisting(): Promise<void> {
     if (!this.validateEmail()) {
       return
@@ -576,9 +664,13 @@ export struct AuthPage {
       this.showToast('请输入注册码')
       return
     }
+    if (this.password.length < 6) {
+      this.showToast('密码至少需要 6 位')
+      return
+    }
     this.isSubmitting = true
     const result: AuthResult =
-      await AuthService.registerWithHuawei(this.bindToken, this.getFullEmail(), this.registerCode.trim())
+      await AuthService.register(this.getFullEmail(), this.password, this.registerCode.trim())
     this.isSubmitting = false
     if (!result.success) {
       this.showToast(result.message)
@@ -610,6 +702,9 @@ export struct AuthPage {
   }
 
   private getStageDescription(): string {
+    if (this.stage === LoginStage.EMAIL_LOGIN) {
+      return '使用邮箱账号登录'
+    }
     if (this.stage === LoginStage.HUAWEI_LOGIN) {
       return '使用华为账号安全登录'
     }

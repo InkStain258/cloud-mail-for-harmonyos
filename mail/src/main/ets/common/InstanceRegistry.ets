@@ -160,9 +160,9 @@ export class InstanceRegistry {
   private static createDefaultInstance(): MailInstance {
     return new MailInstance(
       InstanceRegistry.DEFAULT_INSTANCE_ID,
-      '云笺集主服务',
+      'inkstain 邮箱',
       Constants.API_URL,
-      'mail.riordon.xyz'
+      'mail.inkstain.top'
     )
   }
 

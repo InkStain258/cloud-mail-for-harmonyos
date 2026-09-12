@@ -1,7 +1,7 @@
 ﻿export default class Constants {
-  static readonly API_URL: string = 'https://mail.riordon.xyz/api'
+  static readonly API_URL: string = 'https://mail.inkstain.top/api'
   static readonly CONTROL_API_URL: string = 'https://control.riordon.xyz'
-  static readonly MAIL_DOMAIN: string = '@riordon.xyz'
+  static readonly MAIL_DOMAIN: string = '@inkstain.top'
   static readonly PRIVACY_POLICY_URL: string =
     'https://agreement-drcn.hispace.dbankcloud.cn/index.html?lang=zh&agreementId=1999604664118594368'
 
